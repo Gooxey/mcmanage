@@ -1,0 +1,15 @@
+[package]
+name = "frontend"
+authors = ["Gooxey"]
+description = "TODO"
+edition = "2021"
+license-file = "../LICENSE"
+readme = "../README.md"
+rust-version = "1.67.1"
+publish = false
+repository = "https://github.com/Gooxey/MCManage.git"
+version = "0.1.0"
+
+
+[dependencies]
+yew = { version = "0.20.0", features = ["csr"] }

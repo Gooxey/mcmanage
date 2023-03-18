@@ -1,0 +1,16 @@
+dist/
+target/
+/archive.rs
+
+
+/config/
+/logs/
+/servers/
+/test_files/
+/website/
+
+/libs/common/config/
+/libs/common/logs/
+/libs/common/servers/
+/libs/common/test_files/
+/libs/common/website/
