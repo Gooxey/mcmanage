@@ -1,103 +1,122 @@
 //! This module provides the [`Config struct`](Config), which is used all over the [`MCManage network`](https://github.com/Gooxey/MCManage.git) as the application's config.
 
 
-use std::sync::Arc;
 use std::time::Duration;
 
+use proc_macros::add_convert;
+use tokio::sync::Mutex;
 
-/// The following line is copied from the Minecraft servers EULA
-/// By changing the setting below to TRUE you are indicating your agreement to our EULA (https://aka.ms/MinecraftEULA).
-const AGREE_TO_EULA: bool = true;
+use crate::mcmanage_error::MCManageError;
+use crate::qol::load_toml_file::{load_toml_file, replace_with_valid_file};
+
+use self::config_default::CONFIG_DEFAULT;
+
+
+mod config_default;
 
 
 /// This struct represents the config of applications in the [`MCManage network`](https://github.com/Gooxey/MCManage.git).
+#[add_convert]
 pub struct Config {
-    /// The port the communicator should use.
-    communicator_port: u16,
-    /// The port the webserver should run on.
-    website_port: u16,
-    /// The size of the buffers created by this application. (If set too low, it can cause many different kinds of information to only be partially transmitted.)
-    buffsize: usize,
-    /// The time the application waits between checks.
-    refresh_rate: Duration,
-    /// The maximum number of times an operation gets retried.
-    max_tries: u64,
     /// Sets whether or not all EULAs for the Minecraft servers get accepted automatically. \
     /// The following line is copied from the vanilla Minecraft server's EULA. \
     /// ' By changing the setting below to TRUE you are indicating your agreement to our EULA <https://aka.ms/MinecraftEULA>. ' \
     /// In other words:, when this function returns true, you are agreeing to any EULA this application automatically accepts.
     agree_to_eula: bool,
-    /// If no player is playing on any server for that duration, the computer running this application gets shut down. \
-    /// If the value is 0, no shutdowns will be performed.
-    shutdown_time: Duration,
+    /// The size of the buffers created by this application. (If set too low, it can cause many different kinds of information to only be partially transmitted.)
+    buffsize: usize,
+    /// The port the communicator should use.
+    communicator_port: u16,
+    /// Sets how long the application wait to give other tasks a chance to execute.
+    cooldown: Duration,
+    /// The maximum number of times an operation gets retried.
+    max_tries: u64,
     /// The amount of time the [`MCServerManager`](crate::mcserver_manager::MCServerManager) should wait between restarts of the [`MCServers`](crate::mcserver_manager::mcserver::MCServer). \
     /// If the value is 0, no restarts will be performed.
     mcserver_restart_time: Duration,
-    /// Sets how long a message gets attempted to be sent until it gets destroyed. \
-    /// If the value is 0, the message will never be destroyed.
-    message_max_lifetime: Duration,
-    /// Sets how long the application wait to give other tasks a chance to execute.
-    cooldown: Duration
+    /// If no player is playing on any server for that duration, the computer running this application gets shut down. \
+    /// If the value is 0, no shutdowns will be performed.
+    shutdown_time: Duration,
+    /// The port the website should use.
+    website_port: u16,
 }
 impl Config {
     /// Create a new [`Config`] instance.
-    pub fn new() -> Arc<Self> {
-        Self {
-            communicator_port: 25564,
-            website_port: 8080,
-            buffsize: 100000000,
-            refresh_rate: Duration::new(0, 100000000),
-            max_tries: 3,
-            agree_to_eula: AGREE_TO_EULA,
-            shutdown_time: Duration::new(0, 0),
-            mcserver_restart_time: Duration::new(86400, 0),
-            message_max_lifetime: Duration::new(60, 0),
-            cooldown: Duration::new(0, 100000000)
-        }.into()
+    pub fn new() -> Mutex<Self> {
+        Config::load_config().into()
     }
-    /// Return the port the communicator should use.
-    pub fn communicator_port(&self) -> &u16 {
-        &self.communicator_port
-    }
-    /// Return the port the webserver should run on.
-    pub fn website_port(&self) -> &u16 {
-        &self.website_port
-    }
-    /// Return the size of the buffers created by this application. (If set too low, it can cause many different kinds of information to only be partially transmitted.)
-    pub fn buffsize(&self) -> &usize {
-        &self.buffsize
-    }
-    /// Return the time the application waits between checks.
-    pub fn refresh_rate(&self) -> &Duration {
-        &self.refresh_rate
-    }
-    /// Return the maximum number of times an operation gets retried.
-    pub fn max_tries(&self) -> &u64 {
-        &self.max_tries
+    /// Load the applications config from the `config.toml` file
+    fn load_config() -> Self {
+        let config_toml;
+        if let Ok(toml) = load_toml_file(
+            "Main",
+            "config",
+            "config",
+            CONFIG_DEFAULT,
+            true
+        ) {
+            config_toml = toml.to_string();
+        } else {
+            config_toml = load_toml_file(
+                "Main",
+                "config",
+                "config",
+                CONFIG_DEFAULT,
+                true
+            ).unwrap_or_else(|_| panic!("The first call to load_toml_file should have fixed the config.toml file"))
+            .to_string();
+        }
+        
+        if let Ok(config) = toml::from_str(&config_toml) {
+            config
+        } else {
+            replace_with_valid_file(CONFIG_DEFAULT, "config", "config");
+            toml::from_str(&config_toml).unwrap_or_else(|_| panic!("The default config content should be valid."))
+        }
     }
     /// Return whether or not all EULAs for the Minecraft servers get accepted automatically. \
     /// The following line is copied from the vanilla Minecraft server's EULA. \
     /// ' By changing the setting below to TRUE you are indicating your agreement to our EULA <https://aka.ms/MinecraftEULA>. ' \
     /// In other words:, when this function returns true, you are agreeing to any EULA this application automatically accepts.
-    pub fn agree_to_eula(&self) -> &bool {
+    pub fn agree_to_eula(&mut self) -> &bool {
+        *self = Config::load_config();
         &self.agree_to_eula
     }
-    /// If no player is playing on any server for that duration, the computer running this application gets shut down. \
-    /// If the value is 0, no shutdowns will be performed.
-    pub fn shutdown_time(&self) -> &Duration {
-        &self.shutdown_time
+    /// Return the size of the buffers created by this application. (If set too low, it can cause many different kinds of information to only be partially transmitted.)
+    pub fn buffsize(&mut self) -> &usize {
+        *self = Config::load_config();
+        &self.buffsize
+    }
+    /// Return the port the communicator should use.
+    pub fn communicator_port(&mut self) -> &u16 {
+        *self = Config::load_config();
+        &self.communicator_port
+    }
+    /// Return how long the application waits to give other tasks a chance to execute
+    pub fn cooldown(&mut self) -> &Duration {
+        *self = Config::load_config();
+        &self.cooldown
+    }
+    /// Return the maximum number of times an operation gets retried.
+    pub fn max_tries(&mut self) -> &u64 {
+        *self = Config::load_config();
+        &self.max_tries
     }
     /// Return the amount of time the [`MCServerManager`](crate::mcserver_manager::MCServerManager) should wait between restarts of the [`MCServers`](crate::mcserver_manager::mcserver::MCServer). \
     /// If the value is 0, no restarts will be performed.
-    pub fn mcserver_restart_time(&self) -> &Duration {
+    pub fn mcserver_restart_time(&mut self) -> &Duration {
+        *self = Config::load_config();
         &self.mcserver_restart_time
     }
-    /// Return how long a message gets attempted to be sent until it gets destroyed
-    pub fn message_max_lifetime(&self) -> &Duration {
-        &self.message_max_lifetime
+    /// If no player is playing on any server for that duration, the computer running this application gets shut down. \
+    /// If the value is 0, no shutdowns will be performed.
+    pub fn shutdown_time(&mut self) -> &Duration {
+        *self = Config::load_config();
+        &self.shutdown_time
     }
-    /// Return how long the application wait to give other tasks a chance to execute
-    pub fn cooldown(&self) -> &Duration {
-        &self.cooldown
+    /// The port the website should use.
+    pub fn website_port(&mut self) -> &u16 {
+        *self = Config::load_config();
+        &self.website_port
     }
 }

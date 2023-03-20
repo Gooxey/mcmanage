@@ -87,7 +87,7 @@ pub struct Communicator {
     /// This struct's name
     name: String,
     /// The applications [`Config`]
-    config: Arc<Config>,
+    config: Mutex<Config>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
@@ -110,15 +110,16 @@ impl CommunicatorTrait for Communicator {
 }
 impl Communicator {
     /// Create a new [`Communicator`] instance.
-    pub async fn new(config: &Arc<Config>) -> Arc<Self> {
-        let (messages_send, messages_recv) = channel(*config.buffsize());
+    pub async fn new() -> Arc<Self> {
+        let config = Config::new();
+        let (messages_send, messages_recv) = channel(*config.lock().await.buffsize());
         let communicator = Arc::new(Self {
             name: "Communicator".to_string(),
-            config: config.to_owned(),
+            config,
             main_thread:Arc::new(None.into()),
             status: Mutex::new(Status::Stopped),
 
-            intercom: InterCom::new(config, messages_recv),
+            intercom: InterCom::new(messages_recv),
             messages_send,
             users: vec![].into(),
             workers: ReservedConnections::new()
@@ -190,7 +191,7 @@ impl Communicator {
         loop {
             tries += 1;
 
-            match TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), *self.config.communicator_port())).await {
+            match TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), *self.config.lock().await.communicator_port())).await {
                 Ok(tcplistener) => {
                     self.send_start_result(&mut bootup_result).await?;
 
@@ -208,7 +209,8 @@ impl Communicator {
                     }
                 }
                 Err(erro) => {
-                    if tries == *self.config.max_tries() {
+                    let max_tries = *self.config.lock().await.max_tries();
+                    if tries == max_tries {
                         drop(bootup_result.take().expect("The 'bootup_result' channel only be should taken once. Before taking it again the Communicator should be reset."));
 
                         erro!(self.name, "The maximum number of tries has been reached. A reset will be performed.");
@@ -217,7 +219,7 @@ impl Communicator {
                     }
                     else {
                         erro!(self.name, "Received an error when trying to bind the socket server. Error: {erro}");
-                        erro!(self.name, "This was try {tries} of of {}. 3 seconds till the next one.", self.config.max_tries());
+                        erro!(self.name, "This was try {tries} of of {}. 3 seconds till the next one.", max_tries);
                         sleep(Duration::new(3, 0)).await;
                     } 
                 }
@@ -247,7 +249,7 @@ impl Communicator {
         client.write_all(message.as_slice()).await?;
         
         let message;
-        let mut buffer: Vec<u8> = vec![0; *self.config.buffsize()];
+        let mut buffer: Vec<u8> = vec![0; *self.config.lock().await.buffsize()];
         loop {
             client.readable().await?;
             match client.try_read(&mut buffer) {
@@ -355,7 +357,7 @@ impl Communicator {
     /// This method is responsible executing messages received by the client.
     async fn handle_client_recv<'a>(self: Arc<Self>, client: &ReadHalf<'a>, intercom_send: Sender<Message>, client_addr: SocketAddr, client_type: ClientType) -> Result<(), MCManageError> {
         loop {
-            let mut buffer: Vec<u8> = vec![0; *self.config.buffsize()];
+            let mut buffer: Vec<u8> = vec![0; *self.config.lock().await.buffsize()];
             loop {
                 client.readable().await?;
                 match client.try_read(&mut buffer) {

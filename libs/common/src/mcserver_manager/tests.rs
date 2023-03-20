@@ -15,27 +15,34 @@ async fn test_start() -> Arc<MCServerManager> {
 }
 fn generate_server_list() {
     cleanup();
-    let content = "{
-        \"0\": {
-            \"name\": \"myMinecraftServer\",
-            \"arg\": \"-jar purpur-1.19.3-1876.jar nogui\",
-            \"type\": \"purpur\" 
-        }
-    }";
+    let content = r#"
+        [0]
+        name = "myFirstServer"
+        args = "-jar purpur-1.19.3-1876.jar nogui"
+        type = "purpur"
+
+        [1]
+        name = "mySecondServer"
+        args = "-jar purpur-1.19.3-1876.jar nogui"
+        type = "purpur"
+    "#;
 
     fs::create_dir("config").unwrap();
-    let mut server_list_file = File::options().write(true).create_new(true).open("config/server_list.json").unwrap();
+    let mut server_list_file = File::options().write(true).create_new(true).open("config/server_list.toml").unwrap();
     io::copy(&mut content.as_bytes(), &mut server_list_file).unwrap();
 }
 fn generate_mcserver_manager() -> Arc<MCServerManager> {
     download_minecraft_server();
 
-    MCServerManager::new(&Config::new())
+    MCServerManager::new()
 }
 fn download_minecraft_server() {
     let mut resp = reqwest::blocking::get("https://api.purpurmc.org/v2/purpur/1.19.3/1876/download").expect("An error occurred while downloading the Minecraft server");
-    fs::create_dir_all("servers/myMinecraftServer").expect("An error occurred while creating the servers dir");
-    let mut out = File::create("servers/myMinecraftServer/purpur-1.19.3-1876.jar").expect("failed to create file `purpur-1.19.3-1876.jar`");
+    fs::create_dir_all("servers/myFirstServer").expect("An error occurred while creating the servers dir");
+    fs::create_dir_all("servers/mySecondServer").expect("An error occurred while creating the servers dir");
+    let mut out = File::create("servers/myFirstServer/purpur-1.19.3-1876.jar").expect("failed to create file `purpur-1.19.3-1876.jar`");
+    io::copy(&mut resp, &mut out).expect("failed to copy content");
+    let mut out = File::create("servers/mySecondServer/purpur-1.19.3-1876.jar").expect("failed to create file `purpur-1.19.3-1876.jar`");
     io::copy(&mut resp, &mut out).expect("failed to copy content");
 }
 
@@ -46,21 +53,20 @@ async fn load_mcserver_list_valid_file() {
 
     mcserver_manager.load_mcserver_list().await.unwrap();
 
-    assert_eq!(mcserver_manager.mcserver_list.lock().await.len(), 1, "The function should only have captured one server.");
+    assert_eq!(mcserver_manager.mcserver_list.lock().await.len(), 2, "The function should only have captured two server.");
     cleanup();
 }
 #[tokio::test]
 async fn load_mcserver_list_invalid_file() {
     cleanup();
-    let content = "{
-        \"0\": {
-            \"name\": \"myMinecraftServer\",
-            \"arg\": \"-jar purpur-1.19.3-1876.jar -Xmx4G nogui\",
-        }
-    }";
+    let content = r#"
+        [0]
+        name = "myFirstServer"
+        args = "-jar purpur-1.19.3-1876.jar nogui"
+    }"#;
 
     fs::create_dir("config").unwrap();
-    let mut server_list_file = File::options().write(true).create_new(true).open("config/server_list.json").unwrap();
+    let mut server_list_file = File::options().write(true).create_new(true).open("config/server_list.toml").unwrap();
     io::copy(&mut content.as_bytes(), &mut server_list_file).unwrap();
     
     let mcserver_manager = Arc::new(MCServerManager {
@@ -75,9 +81,9 @@ async fn load_mcserver_list_invalid_file() {
 
     mcserver_manager.load_mcserver_list().await.unwrap_err();
 
-    File::options().write(true).create_new(true).open("config/server_list.json").unwrap();
-    File::options().write(true).create_new(true).open("config/invalid_server_list.json").unwrap_err();
-    File::options().write(true).create_new(true).open("config/server_list_example.json").unwrap_err();
+    File::options().write(true).create_new(true).open("config/server_list.toml").unwrap();
+    File::options().write(true).create_new(true).open("config/invalid_server_list.toml").unwrap_err();
+    File::options().write(true).create_new(true).open("config/server_list_example.toml").unwrap_err();
     cleanup();
 }
 

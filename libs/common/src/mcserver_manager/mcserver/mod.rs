@@ -66,7 +66,7 @@ pub struct MCServer {
     /// This struct's name
     name: String,
     /// The applications [`Config`]
-    config: Arc<Config>,
+    config: Mutex<Config>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
@@ -85,10 +85,10 @@ pub struct MCServer {
 }
 impl MCServer {
     /// Create a new [`MCServer`] instance.
-    pub fn new(name: &str, config: &Arc<Config>, args: &str, mcserver_type: MCServerType) -> Arc<Self> {
+    pub fn new(name: &str, args: &str, mcserver_type: MCServerType) -> Arc<Self> {
         Self {
             name: name.to_owned(),
-            config: config.clone(),
+            config: Config::new(),
             main_thread: Arc::new(None.into()),
             status: Status::Stopped.into(),
             
@@ -198,7 +198,7 @@ impl MCServer {
                 if let Err(erro) = stdin.write_all(format!("{input}\n").as_bytes()).await {
                     erro!(self.name, "An error occurred while writing the input `{input}` to the Minecraft server. This MCServer will be restarted. Error: {erro}");
                     while let Err(MCManageError::NotReady) = self.clone().impl_restart().await {
-                        sleep(*self.config.refresh_rate()).await;
+                        sleep(*self.config.lock().await.cooldown()).await;
                     }
                     self.clone().send_input(input).await;
                 }
@@ -206,7 +206,7 @@ impl MCServer {
             } else {
                 erro!(self.name, "The stdin pipe of this Minecraft server process does not exist. This MCServer will be restarted.");
                 while let Err(MCManageError::NotReady) = self.clone().impl_restart().await {
-                    sleep(*self.config.refresh_rate()).await;
+                    sleep(*self.config.lock().await.cooldown()).await;
                 }
                 self.clone().send_input(input).await;
             }
@@ -266,8 +266,8 @@ impl MCServer {
                             //      MCServerTypeError::FileNotFound
                             //      MCServerTypeError::NotFound
                             _ => {
-                                // TODO: Handle this error <= Something went wrong with the server_types.json file
-                                todo!("Something went wrong with the server_types.json file => The console needs to be implemented before deciding what to do here")
+                                // TODO: Handle this error <= Something went wrong with the server_types.toml file
+                                todo!("Something went wrong with the server_types.toml file => The console needs to be implemented before deciding what to do here")
                             }
                         }
                     }
@@ -363,19 +363,20 @@ impl MCServer {
         warn!(self.name, "The EULA has to be accepted to use this MCServer.");
 
         // agree to the EULA if configured
-        if *self.config.agree_to_eula() {
+        if *self.config.lock().await.agree_to_eula() {
             match File::create(self.path.clone() + "/eula.txt") {
                 Ok(mut eula_file) => {
                     let failcounter = 0;
                     while eula_file.write(b"eula=true").is_err() {
-                        if failcounter == *self.config.max_tries() {
+                        let max_tries = *self.config.lock().await.max_tries();
+                        if failcounter == max_tries {
                             erro!(self.name, "The maximum number of write attempts to the ' eula.txt ' file have been reached. The MCServer will no longer try to accept the EULA.");
                             self.stop();
                             return Err(MCManageError::FatalError);
                         } else {
-                            erro!(self.name, "This was attempt number {} out of {}", failcounter, self.config.max_tries());
+                            erro!(self.name, "This was attempt number {} out of {}", failcounter, max_tries);
                         }
-                        sleep(*self.config.refresh_rate()).await;
+                        sleep(*self.config.lock().await.cooldown()).await;
                     }
                 }
                 Err(erro) => {

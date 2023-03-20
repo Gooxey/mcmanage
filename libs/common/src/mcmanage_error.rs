@@ -3,7 +3,7 @@
 
 use std::{
     io,
-    string::FromUtf8Error
+    string::FromUtf8Error, str::Utf8Error
 };
 use thiserror::Error;
 
@@ -47,10 +47,16 @@ pub enum MCManageError {
     /// An error of kind IOError occurred.
     #[error("An error of kind IOError occurred.")]
     IOError(#[from] io::Error),
-    /// An error of kind SerdeJsonError occurred.
-    #[error("An error of kind SerdeJsonError occurred.")]
-    SerdeJsonError(#[from] serde_json::Error),
+    /// An error of kind FromUtf8Error occurred.
+    #[error("An error of kind FromUtf8Error occurred.")]
+    FromUtf8Error(#[from] FromUtf8Error),
     /// An error of kind Utf8Error occurred.
     #[error("An error of kind Utf8Error occurred.")]
-    FromUtf8Error(#[from] FromUtf8Error),
+    Utf8Error(#[from] Utf8Error),
+    /// An error of kind toml::de::Error occurred.
+    #[error("An error of kind toml::de::Error occurred.")]
+    TomlDeserializeError(#[from] toml::de::Error),
+    /// An error of kind toml::de::Error occurred.
+    #[error("An error of kind toml::ser::Error occurred.")]
+    TomlSerializeError(#[from] toml::ser::Error)
 }

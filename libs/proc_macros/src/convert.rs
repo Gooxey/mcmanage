@@ -20,30 +20,30 @@ pub fn convert(input: TokenStream) -> TokenStream {
     // implement the code generated for this enum
     quote! {
         impl #generics TryInto<Vec<u8>> for #struct_name_ident #generics #where_clause {
-            type Error = serde_json::Error;
+            type Error = MCManageError;
         
-            fn try_into(self) -> Result<Vec<u8>, serde_json::Error> {
-                serde_json::to_vec(&self)
+            fn try_into(self) -> Result<Vec<u8>, MCManageError> {
+                Ok(toml::to_string(&self)?.as_bytes().to_vec())
             }
         }
         impl #generics TryInto<String> for #struct_name_ident #generics #where_clause {
-            type Error = serde_json::Error;
+            type Error = MCManageError;
         
-            fn try_into(self) -> Result<String, serde_json::Error> {
-                serde_json::to_string(&self)
+            fn try_into(self) -> Result<String, MCManageError> {
+                Ok(toml::to_string(&self)?)
             }
         }
-        impl #generics TryInto<serde_json::Value> for #struct_name_ident #generics #where_clause {
-            type Error = serde_json::Error;
+        impl #generics TryInto<toml::Value> for #struct_name_ident #generics #where_clause {
+            type Error = MCManageError;
         
-            fn try_into(self) -> Result<serde_json::Value, serde_json::Error> {
-                serde_json::to_value(self)
+            fn try_into(self) -> Result<toml::Value, MCManageError> {
+                Ok(toml::Value::try_from(self)?)
             }
         }
         impl #generics TryFrom<Vec<u8>> for #struct_name_ident #generics #where_clause {
-            type Error = serde_json::Error;
+            type Error = MCManageError;
         
-            fn try_from(value: Vec<u8>) -> Result<Self, serde_json::Error> {
+            fn try_from(value: Vec<u8>) -> Result<Self, MCManageError> {
                 // strip the bytes_string from trailing characters
                 let mut striped_value: Vec<u8> = vec![];
                 for element in value {
@@ -52,21 +52,21 @@ pub fn convert(input: TokenStream) -> TokenStream {
                     }
                 }
                 
-                serde_json::from_slice(&striped_value)
+                Ok(toml::from_str(std::str::from_utf8(&striped_value)?)?)
             }
         }
         impl #generics TryFrom<String> for #struct_name_ident #generics #where_clause {
-            type Error = serde_json::Error;
+            type Error = MCManageError;
         
-            fn try_from(value: String) -> Result<Self, serde_json::Error> {
-                serde_json::from_str(&value)
+            fn try_from(value: String) -> Result<Self, MCManageError> {
+                Ok(toml::from_str(&value)?)
             }
         }
-        impl #generics TryFrom<serde_json::Value> for #struct_name_ident #generics #where_clause {
-            type Error = serde_json::Error;
+        impl #generics TryFrom<toml::Value> for #struct_name_ident #generics #where_clause {
+            type Error = MCManageError;
         
-            fn try_from(value: serde_json::Value) -> Result<Self, serde_json::Error> {
-                serde_json::from_value(value)
+            fn try_from(value: toml::Value) -> Result<Self, MCManageError> {
+                Ok(toml::Value::try_into(value)?)
             }
         }
     }

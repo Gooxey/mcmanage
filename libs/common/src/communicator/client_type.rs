@@ -2,6 +2,7 @@
 
 
 use proc_macros::add_convert;
+use crate::mcmanage_error::MCManageError;
 
 
 /// This enum is used by the Communicator to identify a connected client. With this information and the

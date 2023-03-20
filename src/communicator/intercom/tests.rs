@@ -14,10 +14,10 @@ use super::*;
 
 async fn new_intercom() -> (Arc<InterCom>, Sender<Message>) {
     let config = Arc::new(Config::new());
-    let (send_message, rx) = channel(*config.buffsize());
-    let intercom = InterCom::new(&config.clone(), rx);
+    let (send_message, rx) = channel(*config.lock().await.buffsize());
+    let intercom = InterCom::new(rx);
     
-    intercom.set_communicator(&Communicator::new(&config).await).await;
+    intercom.set_communicator(&Communicator::new().await).await;
 
     (intercom, send_message)
 }

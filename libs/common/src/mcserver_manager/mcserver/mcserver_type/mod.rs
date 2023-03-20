@@ -1,14 +1,14 @@
-//! This module provides the [`MCServerType struct`](MCServerType), which is used to read the `config/mcserver_types.json` file and provide the [`MCServer`](super::MCServer) with strings
+//! This module provides the [`MCServerType struct`](MCServerType), which is used to read the `config/mcserver_types.toml` file and provide the [`MCServer`](super::MCServer) with strings
 //! corresponding to different situations, like a player joining or leaving.
 
 
 use async_recursion::async_recursion;
-use serde_json::Value;
+use toml::Value;
 
 use crate::{
     mcmanage_error::MCManageError,
-    qol::load_json_file::{
-        load_json_file,
+    qol::load_toml_file::{
+        load_toml_file,
         replace_with_valid_file
     }
 };
@@ -20,7 +20,7 @@ pub mod mcserver_types_default;
 
 
 /// With this struct, the [`MCServer`](super::MCServer) is able to interpret messages sent by a Minecraft server. \
-/// To be exact, this struct is responsible for reading the `config/mcserver_types.json` file and providing the [`MCServer`](super::MCServer) with strings corresponding to 
+/// To be exact, this struct is responsible for reading the `config/mcserver_types.toml` file and providing the [`MCServer`](super::MCServer) with strings corresponding to 
 /// different situations, like a player joining or leaving.
 /// 
 /// # Methods
@@ -48,7 +48,7 @@ impl MCServerType {
     /// 
     /// | Parameter           | Description                                                                                                                                                                                      |
     /// |---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-    /// | `server_type: &str` | To see all available options see the `config/mcserver_types.json` file. To see the standard options see the [`MCSERVER_TYPES_DEFAULT constant`](mcserver_types_default::MCSERVER_TYPES_DEFAULT). |
+    /// | `server_type: &str` | To see all available options see the `config/mcserver_types.toml` file. To see the standard options see the [`MCSERVER_TYPES_DEFAULT constant`](mcserver_types_default::MCSERVER_TYPES_DEFAULT). |
     /// | `parent: &str`      | The name of the [`MCServer`](super::MCServer) this [`MCServerType`] was meant for.                                                                                                               |
     pub fn new(server_type: &str, parent: &str) -> Self {
         Self {
@@ -57,13 +57,13 @@ impl MCServerType {
         }
     }
 
-    /// Get a message from the `config/mcserver_types.json` file, which can be found under this MCServer's type ( vanilla, purpur, etc. ) and its
+    /// Get a message from the `config/mcserver_types.toml` file, which can be found under this MCServer's type ( vanilla, purpur, etc. ) and its
     /// identifier ( started, player_joined, etc. ). \
     /// \
     /// This method only works if the message to get is a single string. For messages containing multiple strings, use the
     /// [`get_message_vector method`](Self::get_message_vector).
     fn get_message(&self, identifier: &str) -> Result<Value, MCManageError> {
-        let mcserver_type_json = load_json_file(
+        let mcserver_type_toml = load_toml_file(
             &self.parent,
             "config",
             "mcserver_types",
@@ -71,8 +71,8 @@ impl MCServerType {
             true
         )?;
 
-        // get the json of a provided server type
-        if let Some(server) = mcserver_type_json.get(&self.server_type) {
+        // get the toml of a provided server type
+        if let Some(server) = mcserver_type_toml.get(&self.server_type) {
             if let Some(message) = server.get(identifier) {
                 Ok(message.to_owned())
             } else {
@@ -83,7 +83,7 @@ impl MCServerType {
             Err(MCManageError::NotFound)
         }
     }
-    /// Get a message from the `config/mcserver_types.json` file, which can be found under this MCServer's type ( vanilla, purpur, etc. ) and its
+    /// Get a message from the `config/mcserver_types.toml` file, which can be found under this MCServer's type ( vanilla, purpur, etc. ) and its
     /// identifier ( started, player_joined, etc. ). \
     /// \
     /// This method is only useful if the message to be retrieved contains multiple strings. For messages containing a single string, use the
@@ -123,9 +123,14 @@ impl MCServerType {
     /// Get the name of the player that joined in the line provided.
     #[async_recursion]
     pub async fn get_player_name_joined(&self, line: &str) -> Result<String, MCManageError> {
-        let player_name_pos;
-        if let Some(pos) = self.get_message("player_name_joined_pos")?.as_u64() {
-            player_name_pos = pos;
+        let player_name_pos: u64;
+        if let Some(pos) = self.get_message("player_name_joined_pos")?.as_integer() {
+            if let Ok(pos) = pos.try_into() {
+                player_name_pos = pos;
+            } else {
+                replace_with_valid_file(MCSERVER_TYPES_DEFAULT, "config", "mcserver_types");
+                return self.get_player_name_joined(line).await;
+            }
         } else {
             replace_with_valid_file(MCSERVER_TYPES_DEFAULT, "config", "mcserver_types");
             return self.get_player_name_joined(line).await;
@@ -153,8 +158,13 @@ impl MCServerType {
     #[async_recursion]
     pub async fn get_player_name_left(&self, line: &str) -> Result<String, MCManageError> {
         let player_name_pos;
-        if let Some(pos) = self.get_message("player_name_left_pos")?.as_u64() {
-            player_name_pos = pos;
+        if let Some(pos) = self.get_message("player_name_left_pos")?.as_integer() {
+            if let Ok(pos) = pos.try_into() {
+                player_name_pos = pos;
+            } else {
+                replace_with_valid_file(MCSERVER_TYPES_DEFAULT, "config", "mcserver_types");
+                return self.get_player_name_left(line).await;
+            }
         } else {
             replace_with_valid_file(MCSERVER_TYPES_DEFAULT, "config", "mcserver_types");
             return self.get_player_name_left(line).await;

@@ -48,7 +48,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                                     break;
                                 }
                                 _ => {
-                                    tokio::time::sleep(*self.config.refresh_rate()).await;
+                                    tokio::time::sleep(*self.config.lock().await.cooldown()).await;
                                 }
                             }
                         }
@@ -64,7 +64,8 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                 let mut failcounter = 0;
                 loop {
                     if let Err(erro) = self.clone().impl_start(true).await {
-                        if failcounter == *self.config.max_tries() {
+                        let max_tries = *self.config.lock().await.max_tries();
+                        if failcounter == max_tries {
                             erro!(self.name, "The maximum number of start attempts has been reached. This struct will no longer attempt to start.");
                             self.reset().await;
                             return Err(MCManageError::FatalError);
@@ -72,9 +73,9 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                             *self.status.lock().await = Status::Restarting;
                             failcounter += 1;
                             erro!(self.name, "Encountered an error while starting. Error: {}", erro);
-                            erro!(self.name, "This was attempt number {} out of {}", failcounter, self.config.max_tries());
+                            erro!(self.name, "This was attempt number {} out of {}", failcounter, max_tries);
                         }
-                        tokio::time::sleep(*self.config.refresh_rate()).await;
+                        tokio::time::sleep(*self.config.lock().await.cooldown()).await;
                     } else {
                         break;
                     }
@@ -170,7 +171,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                         if let Status::Started = *self.status.lock().await {
                             break;
                         }
-                        tokio::time::sleep(*self.config.refresh_rate()).await;
+                        tokio::time::sleep(*self.config.lock().await.cooldown()).await;
                     }
                 }
                 

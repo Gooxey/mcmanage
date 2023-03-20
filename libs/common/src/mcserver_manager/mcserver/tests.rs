@@ -20,7 +20,6 @@ async fn new_mcserver() -> Arc<MCServer> {
 
     MCServer::new(
         "myMinecraftServer",
-        &Config::new(),
         "-jar server.jar nogui",
         MCServerType::new("vanilla", "myMinecraftServer")
     )
@@ -30,7 +29,6 @@ fn new_mcserver_no_download() -> Arc<MCServer> {
     
     MCServer::new(
         "myMinecraftServer",
-        &Config::new(),
         "-jar server.jar nogui",
         MCServerType::new("vanilla", "myMinecraftServer")
     )

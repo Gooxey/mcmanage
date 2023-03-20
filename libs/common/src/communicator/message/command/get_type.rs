@@ -3,7 +3,10 @@
 
 use proc_macros::add_convert;
 
-use crate::communicator::client_type::ClientType;
+use crate::{
+    communicator::client_type::ClientType,
+    mcmanage_error::MCManageError
+};
 
 use super::Command;
 

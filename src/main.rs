@@ -56,6 +56,7 @@ use common::{
 
 use crate::communicator::Communicator;
 
+// TODO Constantly check for changes in file system (config files get edited)
 
 mod communicator;
 
@@ -93,13 +94,17 @@ async fn serve_website(addr: SocketAddr, app: Router) {
 #[tokio::main]
 async fn main() {
     info!("Main", "Starting...");
+
+    let config = Config::new();
+    let communicator = Communicator::new().await;
+    let mcserver_manager = MCServerManager::new();
     
     info!("Main", "Exporting the website...");
     load_website();
 
     let addr = SocketAddr::from((
         IpAddr::V4(Ipv4Addr::LOCALHOST),
-        8080,
+        *config.lock().await.website_port(),
     ));
     info!("Main", "Starting the webserver at 'http://{addr}'...");
 
@@ -118,9 +123,7 @@ async fn main() {
     ));
     spawn(serve_website(addr, app));
 
-    let config = Config::new();
-    let communicator = Communicator::new(&config).await;
-    let mcserver_manager = MCServerManager::new(&config);
+
     communicator.start();
     mcserver_manager.start();
 
@@ -138,7 +141,7 @@ async fn main() {
 
 
     if let Err(MCManageError::NotReady) = mcserver_manager.clone().impl_stop(false, false).await {
-        mcserver_manager.reset().await;
+        mcserver_manager.reset().await; // FIXME Will not stop when: An error occurred while starting the Minecraft Server myFirstServer. Error: Der Verzeichnisname ist ungültig. (os error 267)
     }
     if (communicator.impl_stop(false, true).await).is_err() {}
 }

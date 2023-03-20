@@ -8,7 +8,7 @@ This project is still in very early development.
 
 ## Features
 
-- Starts Minecraft servers configured in the `config/server_list.json` file ( The Minecraft server must be stored under `servers/<the name of the server>` )
+- Starts Minecraft servers configured in the `config/server_list.toml` file ( The Minecraft server must be stored under `servers/<the name of the server>` )
 - Restarts all Minecraft servers every 24h
 - Stores the logs of each server under `logs/<the name of the server>.txt`
 

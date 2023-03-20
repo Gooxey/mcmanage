@@ -2,6 +2,7 @@
 
 
 use proc_macros::add_convert;
+use crate::mcmanage_error::MCManageError;
 
 
 /// This enum describes the type of message holding this enum. There are three possible states. The first one is [`request`](MessageType::Request). It is used when the

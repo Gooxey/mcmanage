@@ -10,7 +10,7 @@ use std::{
 };
 
 use proc_macros::ConcurrentClass;
-use serde_json::Value;
+use toml::Value;
 use tokio::{
     sync::{
         Mutex,
@@ -26,9 +26,9 @@ use crate::{
     mcmanage_error::MCManageError,
     status::Status,
     types::ThreadJoinHandle,
-    qol::load_json_file::{
+    qol::load_toml_file::{
         generate_valid_file,
-        load_json_file
+        load_toml_file
     }
 };
 use self::{
@@ -45,23 +45,23 @@ pub mod mcserver;
 pub mod server_list_example_default;
 
 
-// FIXME When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.json` file, the Minecraft server can fail to start. (only when starting them via the MCServerManager)
+// FIXME When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.toml` file, the Minecraft server can fail to start. (only when starting them via the MCServerManager)
 // TODO Download MCServer specified in its file
 // TODO Custom restart timer for MCServer
 
 /// This struct is responsible for managing all [`MCServers`](MCServer). ( starting, stopping, ... ) \
-/// In more detail, it creates [`MCServer`] structs accordingly to the `servers/server_list.json` file. Additionally it will also start a thread which:
+/// In more detail, it creates [`MCServer`] structs accordingly to the `servers/server_list.toml` file. Additionally it will also start a thread which:
 ///     - If set, will shut down the computer that is running this application.
 ///     - If enabled, will restart Minecraft servers automatically.
 /// 
 /// # Warning
-/// When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.json` file, the Minecraft server can fail to start.
+/// When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.toml` file, the Minecraft server can fail to start.
 #[derive(ConcurrentClass)]
 pub struct MCServerManager {
     /// This struct's name
     name: String,
     /// The applications [`Config`]
-    config: Arc<Config>,
+    config: Mutex<Config>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
@@ -72,10 +72,10 @@ pub struct MCServerManager {
 }
 impl MCServerManager {
     /// Create a new [`MCServerManager`] instance.
-    pub fn new(config: &Arc<Config>) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         Self {
             name: "MCServerManager".to_string(),
-            config: config.clone(),
+            config: Config::new(),
             main_thread: Arc::new(None.into()),
             status: Status::Stopped.into(),
 
@@ -139,14 +139,14 @@ impl MCServerManager {
         }
         *self.mcserver_list.lock().await = vec![];
     }
-    /// Create the MCServers according to the `servers/server_list.json` file. \
-    /// If any problem is detected in the `servers/server_list.json` file, this file will be renamed to `servers/invalid_server_list.json` and an example file will be
-    /// generated under `servers/server_list_example.json`.
+    /// Create the MCServers according to the `servers/server_list.toml` file. \
+    /// If any problem is detected in the `servers/server_list.toml` file, this file will be renamed to `servers/invalid_server_list.toml` and an example file will be
+    /// generated under `servers/server_list_example.toml`.
     /// 
     /// # Warning
-    /// When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.json` file, the Minecraft server can fail to start.
+    /// When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.toml` file, the Minecraft server can fail to start.
     async fn load_mcserver_list(self: &Arc<Self>) -> Result<(), MCManageError> {
-        let mcserver_list_json = load_json_file(
+        let mcserver_list_toml = load_toml_file(
             &self.name,
             "config",
             "server_list",
@@ -156,36 +156,34 @@ impl MCServerManager {
 
         // create a list of MCServers and return it
         let mut mcserver_list: Vec<Arc<MCServer>> = vec![];
-        let mut i = 0;
-        loop {
-            if let Some(server) = mcserver_list_json.get(i.to_string()) {
-                let name = &self.get_server_parameter(server, i, "name")?;
-                let args = &self.get_server_parameter(server, i, "arg")?;
+        if mcserver_list_toml.is_empty() {
+            erro!(self.name, "The 'config/server_list.toml' file did not contain any servers. See the example file for a valid style.");
+            generate_valid_file(SERVER_LIST_EXAMPLE_DEFAULT, "config", "server_list");
+            return Err(MCManageError::InvalidFile);
+        }
+        for (i, key) in mcserver_list_toml.keys().enumerate() {
+            if let Some(server) = mcserver_list_toml.get(key) {
+                let name = key;
+                let args = &self.get_server_parameter(server, i, "args")?;
                 let mcserver_type = &self.get_server_parameter(server, i, "type")?;
 
-                mcserver_list.push(MCServer::new(name, &self.config.clone(), args, MCServerType::new(mcserver_type, name)));
-            } else {
-                if i == 0 {
-                    erro!(self.name, "The 'config/server_list.json' file did not contain any servers. See the example file for a valid style.");
-                    generate_valid_file(SERVER_LIST_EXAMPLE_DEFAULT, "config", "server_list");
-                    return Err(MCManageError::InvalidFile);
-                }
-                *self.mcserver_list.lock().await = mcserver_list;
-                return Ok(());
+                mcserver_list.push(MCServer::new(name, args, MCServerType::new(mcserver_type, name)));
             }
-            i+=1;
         }
+
+        *self.mcserver_list.lock().await = mcserver_list;
+        return Ok(());
     }
-    /// Read a given parameter of a json object and return its value in the form of a string.
-    fn get_server_parameter(self: &Arc<Self>, server_json: &Value, server_id: i32, parameter_name: &str) -> Result<String, MCManageError> {
-        if let Some(value) = server_json.get(parameter_name) {
+    /// Read a given parameter of a toml object and return its value in the form of a string.
+    fn get_server_parameter(self: &Arc<Self>, server_toml: &Value, server_id: usize, parameter_name: &str) -> Result<String, MCManageError> {
+        if let Some(value) = server_toml.get(parameter_name) {
             if let Some(real_value) = value.as_str() {
                 return Ok(real_value.to_string());
             } else {
-                erro!(self.name, "The '{parameter_name}' parameter of server {server_id} should be a string. See the 'servers/server_list_example.json' file for a valid write style.");
+                erro!(self.name, "The '{parameter_name}' parameter of server {server_id} should be a string. See the 'servers/server_list_example.toml' file for a valid write style.");
             }
         } else {
-            erro!(self.name, "The server {server_id} is missing a '{parameter_name}' parameter. See the 'servers/server_list_example.json' file for a valid write style."); 
+            erro!(self.name, "The server {server_id} is missing a '{parameter_name}' parameter. See the 'servers/server_list_example.toml' file for a valid write style."); 
         }
         generate_valid_file(SERVER_LIST_EXAMPLE_DEFAULT, "config", "server_list");
         Err(MCManageError::InvalidFile)
@@ -224,10 +222,11 @@ impl MCServerManager {
             }
 
             // shut down the computer running this application if configured
-            if *self.config.shutdown_time() > Duration::new(0, 0) {
+            if *self.config.lock().await.shutdown_time() > Duration::new(0, 0) {
                 if let Some(offline_counter) = offline_counter {
-                    if Instant::now() - offline_counter >= *self.config.shutdown_time() {
-                        info!(self.name, "No player was active for {:?}. This machine will now shut down.", self.config.shutdown_time());
+                    let shutdown_time = *self.config.lock().await.shutdown_time();
+                    if Instant::now() - offline_counter >= shutdown_time {
+                        info!(self.name, "No player was active for {:?}. This machine will now shut down.", shutdown_time);
                         system_shutdown::shutdown().expect("Could not shutdown this machine.");
                     }
                 }
@@ -240,15 +239,16 @@ impl MCServerManager {
             }
 
             // restart the MCServers automatically every configured amount of time
-            if *self.config.mcserver_restart_time() > Duration::new(0, 0) && Instant::now() - last_restart >= *self.config.mcserver_restart_time() {
-                info!(self.name, "The automatic restart time of {:?} has been reached. All MCServer's will now restart.", *self.config.mcserver_restart_time());
+            let mcserver_restart_time = *self.config.lock().await.mcserver_restart_time();
+            if *self.config.lock().await.mcserver_restart_time() > Duration::new(0, 0) && Instant::now() - last_restart >= mcserver_restart_time {
+                info!(self.name, "The automatic restart time of {:?} has been reached. All MCServer's will now restart.", mcserver_restart_time);
                 for mcserver in &*self.mcserver_list.lock().await {
                     mcserver.restart();
                 }
                 last_restart = Instant::now();
             }
 
-            sleep(*self.config.refresh_rate()).await;
+            sleep(*self.config.lock().await.cooldown()).await;
         }
     }
 }

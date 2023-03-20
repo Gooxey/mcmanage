@@ -93,7 +93,7 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 ///     /// This struct's name
 ///     name: String,
 ///     /// The applications [`Config`]
-///     config: Arc<Config>,
+///     config: Mutex<Config>,
 ///     /// The main thread of this struct
 ///     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
 ///     /// The [`Status`] of this struct
@@ -102,10 +102,10 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 /// // The following methods HAVE TO be implemented, otherwise the application will panic
 /// impl MyConcurrentStruct {
 ///     /// Create a new [`MyConcurrentStruct`] instance.
-///     pub fn new(config: &Arc<Config>) -> Arc<Self> {
+///     pub fn new() -> Arc<Self> {
 ///         Self {
 ///             name: "MyConcurrentStruct".to_string(),
-///             config: config.clone(),
+///             config: Config::new(),
 ///             main_thread: Arc::new(None.into()),
 ///             status: Status::Stopped.into()
 ///         }
@@ -170,7 +170,7 @@ pub fn derive_concurrent_class(input: TokenStream) -> TokenStream {
     concurrent_class::concurrent_class(input)
 }
 
-/// This derive macro allows a struct or enum to be converted from and into [`json-objects`](serde_json::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This derive macro allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods. \
 /// \
 /// Note: Using the [`add_convert`](macro@add_convert) proc attribute significantly reduces the amount of boilerplate code.
@@ -190,6 +190,7 @@ pub fn derive_concurrent_class(input: TokenStream) -> TokenStream {
 ///     Deserialize,
 ///     Serialize
 /// };
+/// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
 /// 
 /// 
 /// #[derive(Convert, Deserialize, Serialize)]
@@ -203,7 +204,7 @@ pub fn derive_convert(input: TokenStream) -> TokenStream {
     convert::convert(input)
 }
 
-/// This attribute allows a struct or enum to be converted from and into [`json-objects`](serde_json::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This attribute allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods.
 /// 
 /// # Example
@@ -217,6 +218,7 @@ pub fn derive_convert(input: TokenStream) -> TokenStream {
 /// Rust code:
 /// ```compile_fail
 /// use proc_macros::add_convert;
+/// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
 /// 
 /// 
 /// #[add_convert]

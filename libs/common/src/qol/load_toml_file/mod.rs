@@ -1,4 +1,4 @@
-//! This module provides the [`load_json_file`] function which will load a [`json object`](Value) from a given file.
+//! This module provides the [`load_toml_file`] function which will load a [`toml object`](Value) from a given file.
 
 
 use std::{
@@ -13,7 +13,7 @@ use std::{
     path::Path
 };
 
-use serde_json::Value;
+use toml::Table;
 
 use crate::{
     erro,
@@ -25,7 +25,7 @@ use crate::{
 mod tests;
 
 
-/// This function will load a [`json object`](Value) from a given file. \
+/// This function will load a [`toml table`](Table) from a given file. \
 /// \
 /// In case the given file is invalid, this function can do one of the following two things:
 ///     1. A example file will be generated, and the invalid file will be renamed.
@@ -40,24 +40,24 @@ mod tests;
 /// | `file_name: &str`       | This is the name of the file. ( The name for the file 'logs/server1/log.txt' is 'log' )          |
 /// | `valid_data: &str`      | This is the string that will be written to the example/valid file.                               |
 /// | `replace_invalid: bool` | Whenever this gets set to true, this function will go with the second option described above.    |
-pub fn load_json_file(caller_name: &str, path: &str, file_name: &str, valid_data: &str, replace_invalid: bool) -> Result<Value, MCManageError> {
-    let destination = format!("{path}/{file_name}.json");
+pub fn load_toml_file(caller_name: &str, path: &str, file_name: &str, valid_data: &str, replace_invalid: bool) -> Result<Table, MCManageError> {
+    let destination = format!("{path}/{file_name}.toml");
 
     if replace_invalid {
-        if let Ok(json_string) = fs::read_to_string(&destination) {
-            if let Ok(json) = serde_json::from_str(&json_string) {
-                return Ok(json);
+        if let Ok(toml_string) = fs::read_to_string(&destination) {
+            if let Ok(toml) = toml::from_str(&toml_string) {
+                return Ok(toml);
             }
         }
         replace_with_valid_file(valid_data, path, file_name);
-        load_json_file(caller_name, path, file_name, valid_data, replace_invalid)
+        load_toml_file(caller_name, path, file_name, valid_data, replace_invalid)
     } else {
-        let example_destination = format!("{path}/{file_name}_example.json");
+        let example_destination = format!("{path}/{file_name}_example.toml");
 
         match fs::read_to_string(&destination) {
-            Ok(json_string) => {
-                if let Ok(json) = serde_json::from_str(&json_string) {
-                    Ok(json)
+            Ok(toml_string) => {
+                if let Ok(toml) = toml::from_str(&toml_string) {
+                    Ok(toml)
                 } else {
                     erro!(caller_name, "The file at {destination} is invalid. A valid example will be generated under {example_destination}.");
                     generate_valid_file(valid_data, path, file_name);
@@ -88,12 +88,12 @@ pub fn generate_valid_file(valid_data: &str, path: &str, file_name: &str) {
     let mut i = 0;
     loop {
         if i == 0 {
-            invalid_file_name = format!("{path}/invalid_{file_name}.json");
+            invalid_file_name = format!("{path}/invalid_{file_name}.toml");
         } else {
-            invalid_file_name = format!("{path}/invalid_{file_name}({}).json", i);
+            invalid_file_name = format!("{path}/invalid_{file_name}({}).toml", i);
         }
         if !Path::new(&invalid_file_name).exists() {
-            if fs::rename(format!("{path}/{file_name}.json"), &invalid_file_name).is_err() {
+            if fs::rename(format!("{path}/{file_name}.toml"), &invalid_file_name).is_err() {
                 if let Err(erro) = fs::create_dir(path) {
                     if let ErrorKind::AlreadyExists = erro.kind() {
                     } else {
@@ -107,7 +107,7 @@ pub fn generate_valid_file(valid_data: &str, path: &str, file_name: &str) {
         }
     }
 
-    let example_destination = format!("{path}/{file_name}_example.json");
+    let example_destination = format!("{path}/{file_name}_example.toml");
     let mut example_file;
     match File::options().write(true).create(true).open(&example_destination) {
         Ok(file) => {
@@ -124,14 +124,14 @@ pub fn generate_valid_file(valid_data: &str, path: &str, file_name: &str) {
 }
 /// This function replaces the invalid file with a valid one.
 pub fn replace_with_valid_file(valid_data: &str, path: &str, file_name: &str) {
-    let destination = format!("{path}/{file_name}.json");
+    let destination = format!("{path}/{file_name}.toml");
     let mut invalid_file_name;
     let mut i = 0;
     loop {
         if i == 0 {
-            invalid_file_name = format!("{path}/invalid_{file_name}.json");
+            invalid_file_name = format!("{path}/invalid_{file_name}.toml");
         } else {
-            invalid_file_name = format!("{path}/invalid_{file_name}({}).json", i);
+            invalid_file_name = format!("{path}/invalid_{file_name}({}).toml", i);
         }
         if !Path::new(&invalid_file_name).exists() {
             if fs::rename(&destination, &invalid_file_name).is_err() {

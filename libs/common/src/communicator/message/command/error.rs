@@ -2,6 +2,7 @@
 
 
 use proc_macros::add_convert;
+use crate::mcmanage_error::MCManageError;
 use super::Command;
 
 

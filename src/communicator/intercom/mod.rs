@@ -39,7 +39,7 @@ pub struct InterCom {
     /// This struct's name
     name: String,
     /// The applications [`Config`]
-    config: Arc<Config>,
+    config: Mutex<Config>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
@@ -58,10 +58,10 @@ impl InterCom {
     /// Create a new [`InterCom`] instance. \
     /// \
     /// Note: The returned struct will remain non-functional until a [`Communicator`] got set via the [`set_communicator`](Self::set_communicator) method.
-    pub fn new(config: &Arc<Config>, receiver: Receiver<Message>) -> Arc<Self> {
+    pub fn new(receiver: Receiver<Message>) -> Arc<Self> {
         Arc::new(Self {
             name: "InterCom".into(),
-            config: config.clone(),
+            config: Config::new(),
             main_thread: Arc::new(None.into()),
             status: Mutex::new(Status::Stopped),
 
@@ -172,8 +172,8 @@ impl InterCom {
             return Err(MCManageError::NotReady);
         }
         
-        let (tx, handler_recv) = channel(*self.config.buffsize());
-        let (handler_send, rx) = channel(*self.config.buffsize());
+        let (tx, handler_recv) = channel(*self.config.lock().await.buffsize());
+        let (handler_send, rx) = channel(*self.config.lock().await.buffsize());
 
         self.add_to_option_list(
             &mut *self.handler_send.lock().await,

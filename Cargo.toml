@@ -12,17 +12,20 @@ version.workspace = true
 
 
 [dependencies]
-common = { path="libs/common" }
 async-recursion = "1.0.4"
 async-trait = "0.1.67"
 axum = "0.6.11"
+common = { path="libs/common" }
 ctrlc = "3.2.5"
 include_dir = "0.7.3"
+proc_macros ={ path = "libs/proc_macros"}
 thiserror = "1.0.40"
 tokio = { version="1.26.0", features=["full"]}
 tower = "0.4.13"
 tower-http = { version="0.4.0", features=["full"] }
-proc_macros ={ path = "libs/proc_macros"}
+
+[build-dependencies]
+winres = "0.1.12"
 
 
 [workspace]
@@ -31,7 +34,7 @@ exclude = ["frontend"]
 
 [workspace.package]
 authors = ["Gooxey"]
-description = "TODO"
+description = "This application is aiming to make the creation and management of Minecraft servers as easy as possible."
 edition = "2021"
 license-file = "LICENSE"
 readme = "README.md"
