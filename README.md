@@ -22,7 +22,7 @@ The `servers` folder can also be modified since it is the one storing all Minecr
 
 ## Install
 
-To install this application, you need [rust and cargo](https://www.rust-lang.org/tools/install).
+To install this application, you need [rust, cargo](https://www.rust-lang.org/tools/install) and [trunk](https://trunkrs.dev/#install).
 
 Next, just run the following command:
 
