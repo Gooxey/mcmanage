@@ -152,7 +152,22 @@ impl MCServer {
     /// \
     /// The `forced` parameter is used to wait for a given struct to start / stop to ensure a stop attempt.
     pub async fn impl_stop(self: Arc<Self>, restart: bool, forced: bool) -> Result<(), MCManageError> {
-        self.check_allowed_stop(restart, forced).await?;
+        // FIXME Because of some bug, this method will deadlock when called while the Minecraft server is still starting.
+        // This is the order of actions happening:
+        // 1. Ctrl+C gets pressed
+        // 2. The MCServerManagers impl_stop method gets called (all parameters set to false)
+        // 3. That method calls the MCServers impl_stop method and waits for a result
+        // 4. This method waits for the MCServer to get the status Started because the forced parameter is set to true
+        // 5. Meanwhile, the impl_start method is still waiting for the Minecraft server to start
+        // 6. The Minecraft server and main thread both crash
+        // 7. The impl_start methods call to the recv_start_result method gets the error that the bootup_result channel got dropped
+        // 8. The recv_start_result method calls the reset method
+        // 9. The reset method waits for the lock on the status field
+        if forced {
+            if self.check_allowed_stop(restart, false).await.is_err() {}
+        } else {
+            self.check_allowed_stop(restart, forced).await?;
+        }
 
         if !restart { info!(self.name, "Shutting down..."); }
         let stop_time = Instant::now();

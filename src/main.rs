@@ -2,9 +2,6 @@
 //! other two applications connect to or get started from. Therefore all data will be stored here.
 
 
-// TODO add descriptions to the config files
-
-
 #![warn(missing_docs)]
 #![warn(clippy::missing_docs_in_private_items)]
 #![warn(clippy::unwrap_used)]
@@ -56,9 +53,9 @@ use common::{
 
 use crate::communicator::Communicator;
 
-// TODO Constantly check for changes in file system (config files get edited)
 
 mod communicator;
+
 
 /// This is necessary for compiling the website in the 'dist/' directory into the executable
 const DIST_FILES: Dir = include_dir!("$CARGO_MANIFEST_DIR/dist");
@@ -141,7 +138,7 @@ async fn main() {
 
 
     if let Err(MCManageError::NotReady) = mcserver_manager.clone().impl_stop(false, false).await {
-        mcserver_manager.reset().await; // FIXME Will not stop when: An error occurred while starting the Minecraft Server myFirstServer. Error: Der Verzeichnisname ist ungültig. (os error 267)
+        mcserver_manager.reset().await;
     }
     if (communicator.impl_stop(false, true).await).is_err() {}
 }
