@@ -30,9 +30,8 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             /// For a non-blocking mode use the [`restart method`](Self::restart).
             pub async fn impl_restart(self: std::sync::Arc<Self>) -> Result<(), MCManageError> {
                 self.check_allowed_restart().await?;
-                
-                let restart_time = std::time::Instant::now();
 
+                let restart_time = std::time::Instant::now();
                 info!(self.name, "Restarting...");
 
 
@@ -43,39 +42,30 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                             break;
                         }
                         Err(erro) => {
-                            match erro {
-                                MCManageError::FatalError => {
-                                    break;
-                                }
-                                _ => {
-                                    tokio::time::sleep(*self.config.lock().await.cooldown()).await;
-                                }
+                            if let MCManageError::FatalError = erro {
+                                break;
                             }
+                            tokio::time::sleep(config::cooldown().await).await;
                         }
                     }
                 }
                 self.reset().await;
-                *self.status.lock().await = Status::Restarting;
 
 
                 // ### STARTING ###
 
                 // Try to start the class until it succeeds or the fail limit is reached
-                let mut failcounter = 0;
-                loop {
+                let max_tries = config::max_tries().await;
+                for i in 0..max_tries {
                     if let Err(erro) = self.clone().impl_start(true).await {
-                        let max_tries = *self.config.lock().await.max_tries();
-                        if failcounter == max_tries {
-                            erro!(self.name, "The maximum number of start attempts has been reached. This struct will no longer attempt to start.");
-                            self.reset().await;
-                            return Err(MCManageError::FatalError);
-                        } else {
-                            *self.status.lock().await = Status::Restarting;
-                            failcounter += 1;
-                            erro!(self.name, "Encountered an error while starting. Error: {}", erro);
-                            erro!(self.name, "This was attempt number {} out of {}", failcounter, max_tries);
+                        error!(self.name, "Encountered an error while starting. Error: {}", erro);
+                        error!(self.name, "This was attempt number {} out of {}", i, max_tries);
+
+                        if i == max_tries {
+                            panic!("The maximum number of start attempts has been reached. {} will no longer attempt to start.", self.name)
                         }
-                        tokio::time::sleep(*self.config.lock().await.cooldown()).await;
+
+                        tokio::time::sleep(config::cooldown().await).await;
                     } else {
                         break;
                     }
@@ -100,27 +90,27 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             pub fn restart(self: &std::sync::Arc<Self>) {
                 tokio::spawn(self.clone().impl_restart());
             }
-            
+
             /// Wait for the started signal.
-            async fn recv_start_result(self: &std::sync::Arc<Self>, bootup_result: tokio::sync::oneshot::Receiver<()>) -> Result<(), MCManageError> {
+            async fn recv_start_result(self: &std::sync::Arc<Self>, mut bootup_result: tokio::sync::oneshot::Receiver<()>, restart: bool) {
                 if let Err(_) = bootup_result.await {
-                    if let Status::Stopping = *self.status.lock().await {
+                    if restart {
+                        return;
                     } else {
-                        erro!(self.name, "The main thread crashed. This struct could not be started.");
-                        self.reset().await;
-                        return Err(MCManageError::FatalError);
+                        if let Status::Starting = *self.status.lock().await {
+                        } else {
+                            return;
+                        }
                     }
+                    panic!("The bootup_result channel of {} got dropped before a result got sent.", self.name)
                 }
-                Ok(())
             }
             /// Send the started signal.
-            async fn send_start_result(self: &std::sync::Arc<Self>, bootup_result: &mut Option<tokio::sync::oneshot::Sender<()>>) -> Result<(), MCManageError> {
-                if let Err(_) = bootup_result.take().expect("The 'bootup_result' channel should only be taken once. Before taking it again this struct should be reset.").send(()) {            
-                    erro!(self.name, "The thread starting the struct got stopped! This struct will now shut down.");
-                    self.stop();
-                    return Err(MCManageError::FatalError);
-                }
-                Ok(())
+            async fn send_start_result(self: &std::sync::Arc<Self>, bootup_result: &mut Option<tokio::sync::oneshot::Sender<()>>) {
+                bootup_result.take()
+                    .unwrap_or_else(|| panic!("The 'bootup_result' channel of {} should only be taken once.", self.name))
+                    .send(())
+                    .unwrap_or_else(|_| panic!("The thread starting {} got stopped.", self.name))
             }
             /// Check if the [`impl_start`](Self::impl_start) method is allowed to be executed. \
             /// This function will also set the status of the given class to the right value.
@@ -134,12 +124,14 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             /// | [`MCManageError::CurrentlyExecuting`] | The method is currently being executed by another thread. |
             /// | [`MCManageError::NotReady`]           | The method can not be used.                               |
             async fn check_allowed_start(self: &std::sync::Arc<Self>, restart: bool) -> Result<(), MCManageError> {
-                let mut status = *self.status.lock().await;
-                match status {
+                let mut status = self.status.lock().await;
+                match *status {
                     Status::Started => return Err(MCManageError::AlreadyExecuted),
                     Status::Starting => return Err(MCManageError::CurrentlyExecuting),
                     Status::Stopped => {
-                        status = Status::Starting;
+                        if !restart {
+                            *status = Status::Starting;
+                        }
                         return Ok(())
                     },
                     Status::Stopping => return Err(MCManageError::NotReady),
@@ -166,19 +158,22 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             /// | [`MCManageError::NotReady`]           | The method can not be used.                               |
             async fn check_allowed_stop(self: &std::sync::Arc<Self>, restart: bool, forced: bool) -> Result<(), MCManageError> {
                 if forced && !restart {
+                    info!(self.name, "Waiting to be fully started before stopping...");
                     // wait till the class has started
                     loop {
                         if let Status::Started = *self.status.lock().await {
                             break;
                         }
-                        tokio::time::sleep(*self.config.lock().await.cooldown()).await;
+                        tokio::time::sleep(config::cooldown().await).await;
                     }
                 }
-                
-                let mut status = *self.status.lock().await;
-                match status {
+
+                let mut status = self.status.lock().await;
+                match *status {
                     Status::Started => {
-                        status = Status::Stopping;
+                        if !restart {
+                            *status = Status::Stopping;
+                        }
                         return Ok(())
                     }
                     Status::Starting => return Err(MCManageError::NotReady),
@@ -205,10 +200,10 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             /// | [`MCManageError::CurrentlyExecuting`] | The method is currently being executed by another thread.                 |
             /// | [`MCManageError::NotReady`]           | The method can not be used.                                               |
             async fn check_allowed_restart(self: &std::sync::Arc<Self>) -> Result<(), MCManageError> {
-                let mut status = *self.status.lock().await;
-                match status {
+                let mut status = self.status.lock().await;
+                match *status {
                     Status::Started => {
-                        status = Status::Restarting;
+                        *status = Status::Restarting;
                         return Ok(())
                     }
                     Status::Starting => return Err(MCManageError::NotReady),
@@ -218,27 +213,22 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                 }
             }
             /// Start the [`main thread`](Self::main) of this struct.
-            async fn start_main_thread(self: &std::sync::Arc<Self>) -> Result<tokio::sync::oneshot::Receiver::<()>, MCManageError> {
+            async fn start_main_thread(self: &std::sync::Arc<Self>) -> tokio::sync::oneshot::Receiver::<()> {
                 let (tx, rx) = tokio::sync::oneshot::channel();
                 let mut main_thread = self.main_thread.lock().await;
-                if let None = *main_thread {
-                    *main_thread = Some(tokio::task::spawn(self.clone().main(Some(tx))));
-                    Ok(rx)
-                } else {
-                    erro!(self.name, "There was already a main thread assigned. This struct will be reset.");
-                    self.reset().await;
-                    Err(MCManageError::FatalError)
+
+                if main_thread.is_some() {
+                    panic!("Tried to assign a second main thread for {}.", self.name)
                 }
+                *main_thread = Some(tokio::task::spawn(self.clone().main(Some(tx))));
+                rx
             }
             /// Stop the [`main thread`](Self::main) of this struct.
-            async fn stop_main_thread(self: &std::sync::Arc<Self>) -> Result<(), MCManageError> {
+            async fn stop_main_thread(self: &std::sync::Arc<Self>) {
                 if let Some(thread) = self.main_thread.lock().await.take() {
                     thread.abort();
-                    Ok(())
                 } else {
-                    erro!(self.name, "Failed to find the main thread. This struct will be reset.");
-                    self.reset().await;
-                    Err(MCManageError::NotFound)
+                    panic!("The main thread of {} should be available during a stop.", self.name)
                 }
             }
         }

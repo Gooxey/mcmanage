@@ -3,7 +3,7 @@
 
 use std::{
     io,
-    string::FromUtf8Error, str::Utf8Error
+    str::Utf8Error
 };
 use thiserror::Error;
 
@@ -45,18 +45,18 @@ pub enum MCManageError {
     #[error("The client lacks the permission to execute a given command.")]
     MissingPermission,
     /// An error of kind IOError occurred.
-    #[error("An error of kind IOError occurred.")]
+    #[error(transparent)]
     IOError(#[from] io::Error),
-    /// An error of kind FromUtf8Error occurred.
-    #[error("An error of kind FromUtf8Error occurred.")]
-    FromUtf8Error(#[from] FromUtf8Error),
     /// An error of kind Utf8Error occurred.
-    #[error("An error of kind Utf8Error occurred.")]
+    #[error(transparent)]
     Utf8Error(#[from] Utf8Error),
     /// An error of kind toml::de::Error occurred.
-    #[error("An error of kind toml::de::Error occurred.")]
+    #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
     /// An error of kind toml::de::Error occurred.
-    #[error("An error of kind toml::ser::Error occurred.")]
-    TomlSerializeError(#[from] toml::ser::Error)
+    #[error(transparent)]
+    TomlSerializeError(#[from] toml::ser::Error),
+    /// An error of kind SerdeJsonError occurred.
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::Error)
 }

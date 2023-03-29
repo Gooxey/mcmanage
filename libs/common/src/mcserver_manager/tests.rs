@@ -1,49 +1,33 @@
 #![cfg(test)]
 
 
-use std::{fs::{self, File}, io};
+use tokio::{fs::{OpenOptions, self}, io, spawn};
 
-use tokio::task::spawn_blocking;
-
-use crate::test_functions::*;
+use crate::{test_functions::*, qol::load_toml_file::load_toml_replace};
 use super::*;
 
 
 async fn test_start() -> Arc<MCServerManager> {
-    generate_server_list();
-    spawn_blocking(|| generate_mcserver_manager()).await.unwrap()
+    setup_logger();
+    generate_server_list().await;
+    MCServerManager::new().await
 }
-fn generate_server_list() {
+// TODO use 2 servers here as soon as the properties of a server become configurable
+async fn generate_server_list() {
     cleanup();
     let content = r#"
-        [0]
-        name = "myFirstServer"
-        args = "-jar purpur-1.19.3-1876.jar nogui"
-        type = "purpur"
-
-        [1]
-        name = "mySecondServer"
-        args = "-jar purpur-1.19.3-1876.jar nogui"
-        type = "purpur"
+        [myFirstServer]
+        download_from = "https://api.purpurmc.org/v2/purpur/1.19.3/1933/download"
+        args = "-jar purpur-1.19.3-1933.jar nogui"
+        mcserver_type = "purpur"
+        [myFirstServer.restart_time]
+        secs = 60
+        nanos = 0
     "#;
 
-    fs::create_dir("config").unwrap();
-    let mut server_list_file = File::options().write(true).create_new(true).open("config/server_list.toml").unwrap();
-    io::copy(&mut content.as_bytes(), &mut server_list_file).unwrap();
-}
-fn generate_mcserver_manager() -> Arc<MCServerManager> {
-    download_minecraft_server();
-
-    MCServerManager::new()
-}
-fn download_minecraft_server() {
-    let mut resp = reqwest::blocking::get("https://api.purpurmc.org/v2/purpur/1.19.3/1876/download").expect("An error occurred while downloading the Minecraft server");
-    fs::create_dir_all("servers/myFirstServer").expect("An error occurred while creating the servers dir");
-    fs::create_dir_all("servers/mySecondServer").expect("An error occurred while creating the servers dir");
-    let mut out = File::create("servers/myFirstServer/purpur-1.19.3-1876.jar").expect("failed to create file `purpur-1.19.3-1876.jar`");
-    io::copy(&mut resp, &mut out).expect("failed to copy content");
-    let mut out = File::create("servers/mySecondServer/purpur-1.19.3-1876.jar").expect("failed to create file `purpur-1.19.3-1876.jar`");
-    io::copy(&mut resp, &mut out).expect("failed to copy content");
+    fs::create_dir("config").await.unwrap();
+    let mut server_list_file = OpenOptions::new().write(true).create_new(true).open("config/server_list.toml").await.unwrap();
+    io::copy(&mut content.as_bytes(), &mut server_list_file).await.unwrap();
 }
 
 // the following two functions will also test `get_server_parameter` and `generate_valid_server_list_file`
@@ -51,9 +35,9 @@ fn download_minecraft_server() {
 async fn load_mcserver_list_valid_file() {
     let mcserver_manager = test_start().await;
 
-    mcserver_manager.load_mcserver_list().await.unwrap();
+    mcserver_manager.load_mcserver_list().await;
 
-    assert_eq!(mcserver_manager.mcserver_list.lock().await.len(), 2, "The function should only have captured two server.");
+    assert_eq!(mcserver_manager.mcserver_list.lock().await.len(), 1, "The function should have captured one server.");
     cleanup();
 }
 #[tokio::test]
@@ -65,25 +49,32 @@ async fn load_mcserver_list_invalid_file() {
         args = "-jar purpur-1.19.3-1876.jar nogui"
     }"#;
 
-    fs::create_dir("config").unwrap();
-    let mut server_list_file = File::options().write(true).create_new(true).open("config/server_list.toml").unwrap();
-    io::copy(&mut content.as_bytes(), &mut server_list_file).unwrap();
-    
+    fs::create_dir("config").await.unwrap();
+    let mut server_list_file = OpenOptions::new().write(true).create_new(true).open("config/server_list.toml").await.unwrap();
+    io::copy(&mut content.as_bytes(), &mut server_list_file).await.unwrap();
+
     let mcserver_manager = Arc::new(MCServerManager {
         name: "MCServerManager".to_string(),
-        config: Config::new(),
         main_thread: Arc::new(None.into()),
         status: Status::Stopped.into(),
 
-        mcserver_list: vec![].into()
+        mcserver_list: vec![].into(),
+        restart_times: vec![].into()
     });
 
+    spawn(async {
+        sleep(Duration::new(1, 0)).await;
 
-    mcserver_manager.load_mcserver_list().await.unwrap_err();
+        let mut mcserver_list = load_toml_replace("config", "server_list", SERVER_LIST_EXAMPLE_DEFAULT, "Test", true).await;
+        mcserver_list.remove("mySecondServer");
 
-    File::options().write(true).create_new(true).open("config/server_list.toml").unwrap();
-    File::options().write(true).create_new(true).open("config/invalid_server_list.toml").unwrap_err();
-    File::options().write(true).create_new(true).open("config/server_list_example.toml").unwrap_err();
+        fs::write("config/server_list.toml", toml::to_string(&mcserver_list).unwrap().as_bytes()).await.unwrap();
+    });
+
+    mcserver_manager.load_mcserver_list().await;
+
+    OpenOptions::new().write(true).create_new(true).open("config/invalid_server_list.toml").await.unwrap_err();
+    OpenOptions::new().write(true).create_new(true).open("config/server_list_example.toml").await.unwrap_err();
     cleanup();
 }
 
@@ -93,9 +84,10 @@ async fn get_mcserver() {
 
     mcserver_manager.clone().impl_start(false).await.unwrap();
 
-    let mcserver = mcserver_manager.get_mcserver("myMinecraftServer").await.unwrap();
+    let mcserver = mcserver_manager.get_mcserver("myFirstServer").await.unwrap();
 
-    assert_eq!(mcserver.name(), "myMinecraftServer");
+    assert_eq!(mcserver.name(), "myFirstServer");
+
     mcserver_manager.impl_stop(false, false).await.unwrap();
     cleanup();
 }
@@ -108,7 +100,7 @@ async fn main() { // this is a test for almost every function in the MCServerMan
 
     mcserver_manager.clone().impl_start(false).await.unwrap();
 
-    let mcserver = mcserver_manager.get_mcserver("myMinecraftServer").await.unwrap();
+    let mcserver = mcserver_manager.get_mcserver("myFirstServer").await.unwrap();
     let start_time = Instant::now();
     loop {
         if Status::Restarting == mcserver.status().await {

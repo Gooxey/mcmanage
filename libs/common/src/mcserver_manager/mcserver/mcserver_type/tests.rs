@@ -7,7 +7,7 @@ use crate::test_functions::*;
 
 fn start_test() -> MCServerType {
     cleanup();
-    MCServerType::new("purpur", "myMinecraftServer")
+    MCServerType::new("purpur", "MyMCServer")
 }
 
 
@@ -25,24 +25,24 @@ fn new() {
 #[tokio::test]
 async fn get_started() {
     let my_mcserver_type = start_test();
-    
-    assert_eq!(my_mcserver_type.get_started().await.unwrap(), [" INFO]: Done (", ")! For help, type \"help\""]);
+
+    assert_eq!(my_mcserver_type.get_started().await, [" INFO]: Done (", ")! For help, type \"help\""]);
 
     cleanup();
 }
 #[tokio::test]
 async fn get_player_joined() {
     let my_mcserver_type = start_test();
-    
-    assert_eq!(my_mcserver_type.get_player_joined().await.unwrap()[0], " joined the game");
+
+    assert_eq!(my_mcserver_type.get_player_joined().await[0], " joined the game");
 
     cleanup();
 }
 #[tokio::test]
 async fn get_player_left() {
     let my_mcserver_type = start_test();
-    
-    assert_eq!(my_mcserver_type.get_player_left().await.unwrap()[0], "left the game");
+
+    assert_eq!(my_mcserver_type.get_player_left().await[0], "left the game");
 
     cleanup();
 }
@@ -62,8 +62,8 @@ async fn get_player_name_left() {
     let my_mcserver_type = start_test();
 
     let name = my_mcserver_type.get_player_name_left("[13:53:51 INFO]: Gooxey left the game").await.unwrap();
-    
+
     assert_eq!(name, "Gooxey");
 
     cleanup();
-}   
+}

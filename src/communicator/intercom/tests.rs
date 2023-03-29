@@ -1,22 +1,26 @@
 #![cfg(test)]
 
 
-use common::communicator::message::{
-    command::{
-        Command,
-        set_id::SetIdArgs
-    },
-    message_type::MessageType
+use common::{
+    communicator::message::{
+        command::{
+            Command,
+            set_id::SetIdArgs
+        },
+        message_type::MessageType
+    }
 };
+
+use crate::test_functions::setup_logger;
 
 use super::*;
 
 
 async fn new_intercom() -> (Arc<InterCom>, Sender<Message>) {
-    let config = Arc::new(Config::new());
-    let (send_message, rx) = channel(*config.lock().await.buffsize());
-    let intercom = InterCom::new(rx);
-    
+    setup_logger();
+    let (send_message, rx) = channel(config::buffsize().await);
+    let intercom = InterCom::new(rx).await;
+
     intercom.set_communicator(&Communicator::new().await).await;
 
     (intercom, send_message)

@@ -3,9 +3,9 @@
 
 /// This constant represents the default content for the `config.toml` file.
 pub const CONFIG_DEFAULT: &str =
-r#"# Sets whether or not all EULAs for the Minecraft servers get accepted automatically. \
-# The following line is copied from the vanilla Minecraft server's EULA. \
-# ' By changing the setting below to TRUE you are indicating your agreement to our EULA https://aka.ms/MinecraftEULA. ' \
+r#"# Sets whether or not all EULAs for the Minecraft servers get accepted automatically.
+# The following line is copied from the vanilla Minecraft server's EULA.
+# ' By changing the setting below to TRUE you are indicating your agreement to our EULA https://aka.ms/MinecraftEULA. '
 # In other words:, when this function returns true, you are agreeing to any EULA this application automatically accepts.
 agree_to_eula = true
 
@@ -26,13 +26,7 @@ website_port = 8080
 secs = 0
 nanos = 100000000
 
-# The amount of time the application should wait between restarts of the Minecraft servers. \
-# If the value is 0, no restarts will be performed.
-[mcserver_restart_time]
-secs = 86400
-nanos = 0
-
-# If no player is playing on any server for that duration, the computer running this application gets shut down. \
+# If no player is playing on any server for that duration, the computer running this application gets shut down.
 # If the value is 0, no shutdowns will be performed.
 [shutdown_time]
 secs = 0

@@ -1,4 +1,4 @@
-//! This module provides the implementation for the [`macro@convert`](super::convert) macro.
+//! This module provides the implementation for the [`macro@toml_convert`](super::toml_convert) macro.
 
 
 use proc_macro::TokenStream;
@@ -6,8 +6,8 @@ use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 
 
-/// This function implements the [`macro@convert`](super::convert) macro.
-pub fn convert(input: TokenStream) -> TokenStream {
+/// This function implements the [`macro@toml_convert`](super::toml_convert) macro.
+pub fn toml_convert(input: TokenStream) -> TokenStream {
     let DeriveInput {
         ident: struct_name_ident,
         data: _,
@@ -23,21 +23,21 @@ pub fn convert(input: TokenStream) -> TokenStream {
             type Error = MCManageError;
 
             fn try_into(self) -> Result<Vec<u8>, MCManageError> {
-                Ok(serde_json::to_vec(&self)?)
+                Ok(toml::to_string(&self)?.as_bytes().to_vec())
             }
         }
         impl #generics TryInto<String> for #struct_name_ident #generics #where_clause {
             type Error = MCManageError;
 
             fn try_into(self) -> Result<String, MCManageError> {
-                Ok(serde_json::to_string(&self)?)
+                Ok(toml::to_string(&self)?)
             }
         }
-        impl #generics TryInto<serde_json::Value> for #struct_name_ident #generics #where_clause {
+        impl #generics TryInto<toml::Value> for #struct_name_ident #generics #where_clause {
             type Error = MCManageError;
 
-            fn try_into(self) -> Result<serde_json::Value, MCManageError> {
-                Ok(serde_json::to_value(self)?)
+            fn try_into(self) -> Result<toml::Value, MCManageError> {
+                Ok(toml::Value::try_from(self)?)
             }
         }
         impl #generics TryFrom<Vec<u8>> for #struct_name_ident #generics #where_clause {
@@ -52,21 +52,21 @@ pub fn convert(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                Ok(serde_json::from_slice(&striped_value)?)
+                Ok(toml::from_str(std::str::from_utf8(&striped_value)?)?)
             }
         }
         impl #generics TryFrom<String> for #struct_name_ident #generics #where_clause {
             type Error = MCManageError;
 
             fn try_from(value: String) -> Result<Self, MCManageError> {
-                Ok(serde_json::from_str(&value)?)
+                Ok(toml::from_str(&value)?)
             }
         }
-        impl #generics TryFrom<serde_json::Value> for #struct_name_ident #generics #where_clause {
+        impl #generics TryFrom<toml::Value> for #struct_name_ident #generics #where_clause {
             type Error = MCManageError;
 
-            fn try_from(value: serde_json::Value) -> Result<Self, MCManageError> {
-                Ok(serde_json::from_value(value)?)
+            fn try_from(value: toml::Value) -> Result<Self, MCManageError> {
+                Ok(toml::Value::try_into(value)?)
             }
         }
     }

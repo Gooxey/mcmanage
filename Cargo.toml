@@ -15,9 +15,12 @@ version.workspace = true
 async-recursion = "1.0.4"
 async-trait = "0.1.67"
 axum = "0.6.11"
+chrono = "0.4.24"
 common = { path="libs/common" }
 ctrlc = "3.2.5"
+fern = { version = "0.6.2", features = ["colored"] }
 include_dir = "0.7.3"
+log = "0.4.17"
 proc_macros ={ path = "libs/proc_macros"}
 thiserror = "1.0.40"
 tokio = { version="1.26.0", features=["full"]}

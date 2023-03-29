@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use common::{
     communicator::message::Message,
-    config::Config,
-    erro,
+    config,
+    error,
     info,
     mcmanage_error::MCManageError,
     status::Status,
@@ -38,13 +38,11 @@ mod tests;
 pub struct InterCom {
     /// This struct's name
     name: String,
-    /// The applications [`Config`]
-    config: Mutex<Config>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
     status: Mutex<Status>,
-    
+
     /// This is the [`Communicator`] of this [`InterCom`]
     communicator: Mutex<Option<Arc<Communicator>>>,
     /// This is a receiving channel for receiving messages from the [`Communicator`]'s [`send_message`](common::communicator::CommunicatorTrait::send_message)
@@ -58,10 +56,9 @@ impl InterCom {
     /// Create a new [`InterCom`] instance. \
     /// \
     /// Note: The returned struct will remain non-functional until a [`Communicator`] got set via the [`set_communicator`](Self::set_communicator) method.
-    pub fn new(receiver: Receiver<Message>) -> Arc<Self> {
+    pub async fn new(receiver: Receiver<Message>) -> Arc<Self> {
         Arc::new(Self {
             name: "InterCom".into(),
-            config: Config::new(),
             main_thread: Arc::new(None.into()),
             status: Mutex::new(Status::Stopped),
 
@@ -76,7 +73,7 @@ impl InterCom {
     pub async fn set_communicator(self: &Arc<Self>, communicator: &Arc<Communicator>) {
         *self.communicator.lock().await = Some(communicator.clone());
     }
-    
+
     /// This is the blocking implementation to start a given struct. \
     /// For a non-blocking mode use the [`start method`](Self::start). \
     /// \
@@ -86,15 +83,15 @@ impl InterCom {
         self.check_allowed_start(restart).await?;
 
         if (self.communicator.lock().await).is_none() {
-            erro!(self.name, "The Communicator has not yet been set.");
+            error!(self.name, "The Communicator has not yet been set.");
             return Err(MCManageError::NotReady);
         }
 
         if !restart { info!(self.name, "Starting..."); }
         let start_time = Instant::now();
 
-        let rx = self.start_main_thread().await?;
-        self.recv_start_result(rx).await?;
+        let rx = self.start_main_thread().await;
+        self.recv_start_result(rx, restart).await;
         *self.status.lock().await = Status::Started;
 
         if !restart { info!(self.name, "Started in {:.3} secs!", start_time.elapsed().as_secs_f64()); }
@@ -113,7 +110,7 @@ impl InterCom {
         if !restart { info!(self.name, "Shutting down..."); }
         let stop_time = Instant::now();
 
-        self.stop_main_thread().await?;
+        self.stop_main_thread().await;
         for slot in &mut *self.handlers.lock().await {
             if let Some(handler) = slot {
                 handler.abort();
@@ -143,7 +140,7 @@ impl InterCom {
     /// \
     /// If the given vector is too short, a None will be appended until the element can be appended. \
     /// Note: This method will override existing data at the given position inside the vector.
-    async fn add_to_option_list<T>(self: &Arc<Self>, option_list: &mut Vec<Option<T>>, element: T, position: usize) {        
+    async fn add_to_option_list<T>(self: &Arc<Self>, option_list: &mut Vec<Option<T>>, element: T, position: usize) {
         let mut i = 0;
         for slot in &mut *option_list {
             if position == i {
@@ -168,12 +165,12 @@ impl InterCom {
     ///     2. Add the channels used to communicate with the [`Communicator's`](Communicator) [`handler`](Communicator::handler).
     pub async fn add_handler(self: &Arc<Self>, handler_id: u64) -> Result<(Sender<Message>, Receiver<Message>), MCManageError> {
         if (self.communicator.lock().await).is_none() {
-            erro!(self.name, "The Communicator has not yet been set.");
+            error!(self.name, "The Communicator has not yet been set.");
             return Err(MCManageError::NotReady);
         }
-        
-        let (tx, handler_recv) = channel(*self.config.lock().await.buffsize());
-        let (handler_send, rx) = channel(*self.config.lock().await.buffsize());
+
+        let (tx, handler_recv) = channel(config::buffsize().await);
+        let (handler_send, rx) = channel(config::buffsize().await);
 
         self.add_to_option_list(
             &mut *self.handler_send.lock().await,
@@ -194,7 +191,7 @@ impl InterCom {
     ///     2. Remove the channels used to communicate with the [`Communicator's`](Communicator) [`handler`](Communicator::handler).
     pub async fn remove_handler(self: &Arc<Self>, handler_id: u64) -> Result<(), MCManageError> {
         if (self.communicator.lock().await).is_none() {
-            erro!(self.name, "The Communicator has not yet been set.");
+            error!(self.name, "The Communicator has not yet been set.");
             return Err(MCManageError::NotReady);
         }
 
@@ -205,7 +202,7 @@ impl InterCom {
                         handler.abort();
                     }
                 } else {
-                    erro!(self.name, "Found a channel but not a handler. This will be fixed.");
+                    error!(self.name, "Found a channel but not a handler. This will be fixed.");
                 }
                 *slot = None;
                 return Ok(());
@@ -231,18 +228,18 @@ impl InterCom {
                         if message_receiver == i as u64 {
                             if let Some(handler) = slot.clone() {
                                 if (handler.send(message).await).is_err() {
-                                    erro!(self.name, "A handler disconnected without removing itself from the InterCom. This will be fixed.");
+                                    error!(self.name, "A handler disconnected without removing itself from the InterCom. This will be fixed.");
                                     *slot = None
                                 }
                             } else {
-                                erro!(self.name, "Tried to send a message to a handler which is not registered. The message will be destroyed.");
+                                error!(self.name, "A handler tried to send a message to a handler which is not registered. The message will be destroyed.");
                             }
                             break;
                         }
                     }
                 }
             } else {
-                erro!(self.name, "The assigned channel got closed before the handler got closed. This handler will now abort.");
+                error!(self.name, "The assigned channel got closed before the handler got closed. This handler will now abort.");
                 return Err(MCManageError::FatalError);
             }
         }
@@ -254,27 +251,27 @@ impl InterCom {
     ///     1. The message was directed at the main application.
     ///     2. The specified receiver was not yet registered.
     async fn main(self: Arc<Self>, mut bootup_result: Option<oneshot::Sender<()>>) -> Result<(), MCManageError> {
-        self.send_start_result(&mut bootup_result).await?;
+        self.send_start_result(&mut bootup_result).await;
 
         loop {
             if let Some(message) = self.receiver.lock().await.recv().await {
                 if 0 == message.receiver() {
-                    erro!(self.name, "This application wanted to send a message to itself. This message will be destroyed.");
+                    error!(self.name, "This application wanted to send a message to itself. This message will be destroyed.");
                     continue;
                 }
 
                 if let Some(slot) = self.handler_send.lock().await.get_mut(message.receiver() as usize) {
                     if let Some(handler) = slot.clone() {
                         if (handler.send(message).await).is_err() {
-                            erro!(self.name, "A handler disconnected without removing itself from the InterCom. This will be fixed.");
+                            error!(self.name, "A handler disconnected without removing itself from the InterCom. This will be fixed.");
                             *slot = None
                         }
                         continue;
                     }
                 }
-                erro!(self.name, "Tried to send a message to a handler which is not registered. The message will be destroyed.");
+                error!(self.name, "The Communicator tried to send a message to a handler which is not registered. The message will be destroyed.");
             } else {
-                erro!(self.name, "The Communicator disconnected! The InterCom will now shutdown too.");
+                error!(self.name, "The Communicator disconnected! The InterCom will now shutdown too.");
                 self.stop();
                 return Err(MCManageError::FatalError);
             }

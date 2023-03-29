@@ -16,6 +16,7 @@ use quote::quote;
 mod match_command;
 mod concurrent_class;
 mod convert;
+mod toml_convert;
 
 
 /// This derive macro generates a function called `execute` which can be used to execute an asynchronous function associated with the variant of a given enum called
@@ -79,11 +80,11 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 /// };
 /// 
 /// use crate::{    // if you use this derive macro inside another library, replace `crate` with `common`
-///     status::Status,
-///     config::Config,
-///     erro,
+///     config,
+///     error,
 ///     info,
 ///     mcmanage_error::MCManageError,
+///     status::Status,
 ///     types::ThreadJoinHandle
 /// };
 /// 
@@ -92,8 +93,6 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 /// struct MyConcurrentStruct {
 ///     /// This struct's name
 ///     name: String,
-///     /// The applications [`Config`]
-///     config: Mutex<Config>,
 ///     /// The main thread of this struct
 ///     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
 ///     /// The [`Status`] of this struct
@@ -102,10 +101,9 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 /// // The following methods HAVE TO be implemented, otherwise the application will panic
 /// impl MyConcurrentStruct {
 ///     /// Create a new [`MyConcurrentStruct`] instance.
-///     pub fn new() -> Arc<Self> {
+///     pub async fn new() -> Arc<Self> {
 ///         Self {
 ///             name: "MyConcurrentStruct".to_string(),
-///             config: Config::new(),
 ///             main_thread: Arc::new(None.into()),
 ///             status: Status::Stopped.into()
 ///         }
@@ -153,7 +151,7 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 ///         if let Some(thread) = self.main_thread.lock().await.take() {thread.abort();}
 ///         *self.status.lock().await = Status::Stopped;
 ///     }
-///     /// This represents the main loop of a given struct.    
+///     /// This represents the main loop of a given struct.
 ///     async fn main(self: Arc<Self>, mut bootup_result: Option<oneshot::Sender<()>>) -> Result<(), MCManageError> {
 ///         self.send_start_result(&mut bootup_result).await?;
 /// 
@@ -170,7 +168,7 @@ pub fn derive_concurrent_class(input: TokenStream) -> TokenStream {
     concurrent_class::concurrent_class(input)
 }
 
-/// This derive macro allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This derive macro allows a struct or enum to be converted from and into [`json-objects`](serde_json::Value), `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods. \
 /// \
 /// Note: Using the [`add_convert`](macro@add_convert) proc attribute significantly reduces the amount of boilerplate code.
@@ -204,7 +202,7 @@ pub fn derive_convert(input: TokenStream) -> TokenStream {
     convert::convert(input)
 }
 
-/// This attribute allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This attribute allows a struct or enum to be converted from and into [`json-objects`](serde_json::Value), `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods.
 /// 
 /// # Example
@@ -230,9 +228,77 @@ pub fn derive_convert(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn add_convert(_: TokenStream, input: TokenStream) -> TokenStream {
     let input: TokenStream2 = input.into();
-    
+
     quote! {
         #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize, proc_macros::Convert)]
+        #input
+    }
+    .into()
+}
+
+/// This derive macro allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
+/// `try_into()` methods. \
+/// \
+/// Note: Using the [`add_convert`](macro@add_convert) proc attribute significantly reduces the amount of boilerplate code.
+/// 
+/// # Example
+/// 
+/// Cargo.toml:
+/// ```toml
+/// serde = { version = "1.0.155", features = ["derive"] }
+/// # A Dependency to this crate is also required
+/// ```
+/// 
+/// Rust code:
+/// ```compile_fail
+/// use proc_macros::TomlConvert;
+/// use serde::{
+///     Deserialize,
+///     Serialize
+/// };
+/// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
+/// 
+/// 
+/// #[derive(TomlConvert, Deserialize, Serialize)]
+/// struct MyConvertibleStruct {
+///     text: String,
+///     number: i64
+/// }
+/// ```
+#[proc_macro_derive(TomlConvert)]
+pub fn derive_toml_convert(input: TokenStream) -> TokenStream {
+    toml_convert::toml_convert(input)
+}
+
+/// This attribute allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
+/// `try_into()` methods.
+/// 
+/// # Example
+/// 
+/// Cargo.toml:
+/// ```toml
+/// serde = { version = "1.0.155", features = ["derive"] }
+/// # A Dependency to this crate is also required
+/// ```
+/// 
+/// Rust code:
+/// ```compile_fail
+/// use proc_macros::add_toml_convert;
+/// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
+/// 
+/// 
+/// #[add_toml_convert]
+/// struct MyConvertibleStruct {
+///     text: String,
+///     number: i64
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn add_toml_convert(_: TokenStream, input: TokenStream) -> TokenStream {
+    let input: TokenStream2 = input.into();
+
+    quote! {
+        #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize, proc_macros::TomlConvert)]
         #input
     }
     .into()
