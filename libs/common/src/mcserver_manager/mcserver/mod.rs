@@ -35,7 +35,7 @@ use tokio::{
 };
 
 use crate::{
-    config,
+    config::Config,
     error,
     info,
     mcmanage_error::MCManageError,
@@ -70,6 +70,8 @@ mod tests;
 pub struct MCServer {
     /// This struct's name
     name: String,
+    /// The applications [`Config`]
+    config: Arc<Mutex<Config>>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
@@ -90,15 +92,16 @@ pub struct MCServer {
 }
 impl MCServer {
     /// Create a new [`MCServer`] instance.
-    pub async fn new(name: &str, server_item: ServerItem) -> Arc<Self> {
+    pub async fn new(name: &str, config: &Arc<Mutex<Config>>, server_item: ServerItem) -> Arc<Self> {
         Self {
             name: name.to_owned(),
+            config: config.clone(),
             main_thread: Arc::new(None.into()),
             status: Status::Stopped.into(),
 
             args: Mutex::new(server_item.args.split(' ').map(String::from).collect()),
             download_from: server_item.download_from.into(),
-            mcserver_type: MCServerType::new(&server_item.mcserver_type, name),
+            mcserver_type: MCServerType::new(config, &server_item.mcserver_type, name),
             minecraft_server: None.into(),
             path: format!("servers/{}", name),
             players: vec![].into()
@@ -212,7 +215,7 @@ impl MCServer {
                     }
                 }
 
-                sleep(config::cooldown().await).await;
+                sleep(Config::cooldown(&mcserver.config).await).await;
             }
         }
 
@@ -236,7 +239,7 @@ impl MCServer {
                     }
                 }
 
-                sleep(config::cooldown().await).await;
+                sleep(Config::cooldown(&self.config).await).await;
             }
         }
 
@@ -256,7 +259,7 @@ impl MCServer {
             }
 
             let mut server_jar_option = None;
-            let max_tries = config::max_tries().await;
+            let max_tries = Config::max_tries(&self.config).await;
             for i in 0..max_tries {
                 match reqwest::get(&*self.download_from.lock().await).await {
                     Ok(file) => {
@@ -360,7 +363,7 @@ impl MCServer {
         if let Err(erro) = send_input_result {
             warn!(self.name, "An error occurred while writing the input `{input}` to the Minecraft server. This MCServer will be restarted. Error: {erro}");
             while let Err(MCManageError::NotReady) = self.clone().impl_restart().await {
-                sleep(config::cooldown().await).await;
+                sleep(Config::cooldown(&self.config).await).await;
             }
             self.clone().send_input(input).await;
         }
@@ -511,7 +514,7 @@ impl MCServer {
         warn!(self.name, "The EULA has to be accepted to use this MCServer.");
 
         // agree to the EULA if configured
-        if config::agree_to_eula().await {
+        if Config::agree_to_eula(&self.config).await {
             File::create(self.path.clone() + "/eula.txt").await
                 .unwrap_or_else(|erro| panic!("Failed to open the EULA file of {}. Error: {erro}", self.name))
                 .write_all(b"eula=true").await

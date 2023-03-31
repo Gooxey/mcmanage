@@ -15,6 +15,7 @@ async fn new_mcserver() -> Arc<MCServer> {
 
     MCServer::new(
         "myMinecraftServer",
+        &Config::new().await,
         ServerItem {
             args: "-jar purpur-1.19.3-1933.jar nogui".to_string(),
             download_from: "https://api.purpurmc.org/v2/purpur/1.19.3/1933/download".to_string(),
@@ -146,7 +147,8 @@ async fn save_output() {
     let mut out = "".to_string();
     if let Err(_) = OpenOptions::new().read(true).open("./logs/servers/myMinecraftServer.log").await.unwrap().read_to_string(&mut out).await {}
 
-    assert_eq!(out, "Test line\n")
+    assert_eq!(out, "Test line\n");
+    cleanup();
 }
 #[tokio::test]
 async fn check_started() {
@@ -269,6 +271,7 @@ async fn download_jar_no_jar_name_set() {
     cleanup();
     let mcserver = MCServer::new(
         "myFirstServer",
+        &Config::new().await,
         ServerItem {
             args: "-jar nogui".to_string(),
             download_from: "https://api.purpurmc.org/v2/purpur/1.19.3/1933/download".to_string(),
@@ -299,6 +302,7 @@ async fn download_jar_only_one_arg() {
     cleanup();
     let mcserver = MCServer::new(
         "myFirstServer",
+        &Config::new().await,
         ServerItem {
             args: "-jar".to_string(),
             download_from: "https://api.purpurmc.org/v2/purpur/1.19.3/1933/download".to_string(),
@@ -329,6 +333,7 @@ async fn download_jar_no_download_from_set() {
     cleanup();
     let mcserver = MCServer::new(
         "myFirstServer",
+        &Config::new().await,
         ServerItem {
             args: "-jar purpur-1.19.3-1933.jar nogui".to_string(),
             download_from: "".to_string(),

@@ -10,7 +10,7 @@ use super::*;
 async fn test_start() -> Arc<MCServerManager> {
     setup_logger();
     generate_server_list().await;
-    MCServerManager::new().await
+    MCServerManager::new(&Config::new().await).await
 }
 // TODO use 2 servers here as soon as the properties of a server become configurable
 async fn generate_server_list() {
@@ -55,6 +55,7 @@ async fn load_mcserver_list_invalid_file() {
 
     let mcserver_manager = Arc::new(MCServerManager {
         name: "MCServerManager".to_string(),
+        config: Config::new().await,
         main_thread: Arc::new(None.into()),
         status: Status::Stopped.into(),
 

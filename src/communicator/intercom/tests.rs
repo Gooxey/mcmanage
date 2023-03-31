@@ -11,17 +11,18 @@ use common::{
     }
 };
 
-use crate::test_functions::setup_logger;
+use crate::test_functions::*;
 
 use super::*;
 
 
 async fn new_intercom() -> (Arc<InterCom>, Sender<Message>) {
     setup_logger();
-    let (send_message, rx) = channel(config::buffsize().await);
-    let intercom = InterCom::new(rx).await;
+    let config = Config::new().await;
+    let (send_message, rx) = channel(Config::buffsize(&config).await);
+    let intercom = InterCom::new(&config, rx).await;
 
-    intercom.set_communicator(&Communicator::new().await).await;
+    intercom.set_communicator(&Communicator::new(&config).await).await;
 
     (intercom, send_message)
 }
@@ -47,6 +48,7 @@ async fn add_single_handler() {
     if let None = handlers[3] {
         assert!(false, "the fourth item should be Some");
     }
+    cleanup();
 }
 #[tokio::test]
 async fn add_multiple_handlers() {
@@ -75,6 +77,7 @@ async fn add_multiple_handlers() {
     if let None = handlers[5] {
         assert!(false, "the sixth item should be Some");
     };
+    cleanup();
 }
 #[tokio::test]
 async fn add_multiple_handlers_reversed() {
@@ -103,6 +106,7 @@ async fn add_multiple_handlers_reversed() {
     if let None = handlers[5] {
         assert!(false, "the sixth item should be Some");
     };
+    cleanup();
 }
 
 #[tokio::test]
@@ -119,6 +123,7 @@ async fn remove_single_handler() {
             assert!(false, "No handler should be registered.")
         }
     }
+    cleanup();
 }
 #[tokio::test]
 async fn remove_multiple_handlers() {
@@ -136,6 +141,7 @@ async fn remove_multiple_handlers() {
             assert!(false, "No handler should be registered.")
         }
     }
+    cleanup();
 }
 #[tokio::test]
 async fn remove_multiple_handlers_reversed() {
@@ -153,6 +159,7 @@ async fn remove_multiple_handlers_reversed() {
             assert!(false, "No handler should be registered.")
         }
     }
+    cleanup();
 }
 
 #[tokio::test]
@@ -177,6 +184,7 @@ async fn add_remove_add_handler() {
     if let None = handlers[3] {
         assert!(false, "the fourth item should be Some");
     }
+    cleanup();
 }
 
 #[tokio::test]
@@ -190,6 +198,7 @@ async fn communicator_to_handler() {
     assert_eq!(message, handler_recv.recv().await.unwrap());
 
     intercom.impl_stop(false, true).await.unwrap();
+    cleanup();
 }
 #[tokio::test]
 async fn handler_to_handler() {
@@ -204,4 +213,5 @@ async fn handler_to_handler() {
 
 
     intercom.impl_stop(false, true).await.unwrap();
+    cleanup();
 }

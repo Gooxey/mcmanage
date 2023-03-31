@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use common::{
     communicator::message::Message,
-    config,
+    config::Config,
     error,
     info,
     mcmanage_error::MCManageError,
@@ -38,6 +38,8 @@ mod tests;
 pub struct InterCom {
     /// This struct's name
     name: String,
+    /// The applications [`Config`]
+    config: Arc<Mutex<Config>>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
@@ -56,9 +58,10 @@ impl InterCom {
     /// Create a new [`InterCom`] instance. \
     /// \
     /// Note: The returned struct will remain non-functional until a [`Communicator`] got set via the [`set_communicator`](Self::set_communicator) method.
-    pub async fn new(receiver: Receiver<Message>) -> Arc<Self> {
+    pub async fn new(config: &Arc<Mutex<Config>>, receiver: Receiver<Message>) -> Arc<Self> {
         Arc::new(Self {
             name: "InterCom".into(),
+            config: config.clone(),
             main_thread: Arc::new(None.into()),
             status: Mutex::new(Status::Stopped),
 
@@ -169,8 +172,8 @@ impl InterCom {
             return Err(MCManageError::NotReady);
         }
 
-        let (tx, handler_recv) = channel(config::buffsize().await);
-        let (handler_send, rx) = channel(config::buffsize().await);
+        let (tx, handler_recv) = channel(Config::buffsize(&self.config).await);
+        let (handler_send, rx) = channel(Config::buffsize(&self.config).await);
 
         self.add_to_option_list(
             &mut *self.handler_send.lock().await,

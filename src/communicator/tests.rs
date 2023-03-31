@@ -6,13 +6,13 @@ use std::io;
 use common::communicator::message::{command::{Command}, message_type::MessageType};
 use tokio::join;
 
-use crate::test_functions::setup_logger;
+use crate::test_functions::*;
 
 use super::*;
 
 
-async fn recv_message(client: &mut TcpStream) -> Message {
-    let mut buffer: Vec<u8> = vec![0; config::buffsize().await];
+async fn recv_message(client: &mut TcpStream, config: &Arc<Mutex<Config>>) -> Message {
+    let mut buffer: Vec<u8> = vec![0; Config::buffsize(config).await];
     loop {
         client.readable().await.unwrap();
         match client.try_read(&mut buffer) {
@@ -32,7 +32,8 @@ async fn recv_message(client: &mut TcpStream) -> Message {
     }
 }
 async fn register_client(client: &mut TcpStream) -> u64 {
-    let message = recv_message(client).await;
+    let config = Config::new().await;
+    let message = recv_message(client, &config).await;
     assert_eq!(Command::GetType(GetTypeArgs { client_type: None }), *message.command());
     assert_eq!(MessageType::Request, *message.message_type());
 
@@ -40,7 +41,7 @@ async fn register_client(client: &mut TcpStream) -> u64 {
     let message: Vec<u8> = Message::new(Command::GetType(GetTypeArgs{client_type:Some(ClientType::User)}), MessageType::Response, 0, 0).try_into().unwrap();
     client.write_all(message.as_slice()).await.unwrap();
 
-    let message = recv_message(client).await;
+    let message = recv_message(client, &config).await;
     assert_eq!(MessageType::Request, *message.message_type());
     if let Command::SetId(args) = message.command() {
         args.id
@@ -53,7 +54,7 @@ async fn register_client(client: &mut TcpStream) -> u64 {
 #[tokio::test]
 async fn start() {
     setup_logger();
-    let communicator = Communicator::new().await;
+    let communicator = Communicator::new(&Config::new().await).await;
     communicator.clone().impl_start(false).await.unwrap();
 
     assert_eq!(Status::Started, *communicator.status.lock().await);
@@ -62,11 +63,12 @@ async fn start() {
     }
 
     communicator.impl_stop(false, true).await.unwrap();
+    cleanup();
 }
 #[tokio::test]
 async fn stop() {
     setup_logger();
-    let communicator = Communicator::new().await;
+    let communicator = Communicator::new(&Config::new().await).await;
     communicator.clone().impl_start(false).await.unwrap();
     communicator.clone().impl_stop(false, true).await.unwrap();
 
@@ -74,11 +76,12 @@ async fn stop() {
     if let Some(_) = *communicator.main_thread.lock().await  {
         assert!(false, "Expected `main_thread` field to not be None.");
     };
+    cleanup();
 }
 #[tokio::test]
 async fn restart() {
     setup_logger();
-    let communicator = Communicator::new().await;
+    let communicator = Communicator::new(&Config::new().await).await;
     communicator.clone().impl_start(false).await.unwrap();
     communicator.clone().impl_restart().await.unwrap();
 
@@ -88,14 +91,16 @@ async fn restart() {
     }
 
     communicator.impl_stop(false, true).await.unwrap();
+    cleanup();
 }
 #[tokio::test]
 async fn handle_single_user() {
     setup_logger();
-    let communicator = Communicator::new().await;
+    let config = Config::new().await;
+    let communicator = Communicator::new(&config).await;
     communicator.clone().impl_start(false).await.unwrap();
 
-    let mut client = TcpStream::connect(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), config::communicator_port().await)).await.unwrap();
+    let mut client = TcpStream::connect(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), Config::communicator_port(&config).await)).await.unwrap();
 
     let id = register_client(&mut client).await;
     assert_eq!(1, id, "Expected to receive the id 1 since this is the only client. There should also not be a single worker registered.");
@@ -104,13 +109,14 @@ async fn handle_single_user() {
     sleep(Duration::new(1, 0)).await; // wait for the client to get registered
     communicator.send_message(message.clone()).await;
 
-    assert_eq!(message, recv_message(&mut client).await, "The received message did not equal the one sent.");
+    assert_eq!(message, recv_message(&mut client, &config).await, "The received message did not equal the one sent.");
 
     communicator.impl_stop(false, true).await.unwrap();
+    cleanup();
 }
 
-async fn client(id: &mut u64, communicator: Arc<Communicator>) {
-    let mut client = TcpStream::connect(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), config::communicator_port().await)).await.unwrap();
+async fn client(id: &mut u64, communicator: Arc<Communicator>, config: &Arc<Mutex<Config>>) {
+    let mut client = TcpStream::connect(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), Config::communicator_port(&config).await)).await.unwrap();
 
     *id = register_client(&mut client).await;
     if *id == 0 {
@@ -123,20 +129,22 @@ async fn client(id: &mut u64, communicator: Arc<Communicator>) {
     let message = Message::new(Command::SetId(SetIdArgs{id:0}), MessageType::Request, *id, 0);
     communicator.send_message(message.clone()).await;
 
-    assert_eq!(message, recv_message(&mut client).await, "The received message did not equal the one sent.");
+    assert_eq!(message, recv_message(&mut client, &config).await, "The received message did not equal the one sent.");
+    cleanup();
 }
 #[tokio::test]
 async fn handle_multiple_users() {
     setup_logger();
-    let communicator = Communicator::new().await;
+    let config = Config::new().await;
+    let communicator = Communicator::new(&Config::new().await).await;
     communicator.clone().impl_start(false).await.unwrap();
 
     let mut user_1 = 0;
     let mut user_2 = 0;
 
     join!(
-        client(&mut user_1, communicator.clone()),
-        client(&mut user_2, communicator.clone())
+        client(&mut user_1, communicator.clone(), &config),
+        client(&mut user_2, communicator.clone(), &config)
     );
 
     if user_1 == user_2 {
@@ -144,4 +152,5 @@ async fn handle_multiple_users() {
     }
 
     communicator.impl_stop(false, true).await.unwrap();
+    cleanup();
 }

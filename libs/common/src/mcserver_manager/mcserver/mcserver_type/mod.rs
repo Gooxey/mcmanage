@@ -2,8 +2,13 @@
 //! corresponding to different situations, like a player joining or leaving.
 
 
+use std::sync::Arc;
+
 use async_recursion::async_recursion;
-use tokio::time::sleep;
+use tokio::{
+    sync::Mutex,
+    time::sleep
+};
 use toml::Value;
 
 use crate::{
@@ -14,7 +19,7 @@ use crate::{
         replace_with_valid_file
     },
     warn,
-    config
+    config::Config
 };
 use self::mcserver_types_default::MCSERVER_TYPES_DEFAULT;
 
@@ -40,6 +45,8 @@ pub mod mcserver_types_default;
 /// | [`get_player_name_left(...) -> Result<...>`](MCServerType::get_player_name_left)     | Get the name of the player that left in the line provided.   |
 #[derive(Clone)]
 pub struct MCServerType {
+    /// The applications [`Config`]
+    config: Arc<Mutex<Config>>,
     /// The type of the [`MCServer`](super::MCServer) holding this struct
     server_type: String,
     /// The name of the [`MCServer`](super::MCServer) holding this struct
@@ -54,8 +61,9 @@ impl MCServerType {
     /// |---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
     /// | `server_type: &str` | To see all available options see the `config/mcserver_types.toml` file. To see the standard options see the [`MCSERVER_TYPES_DEFAULT constant`](mcserver_types_default::MCSERVER_TYPES_DEFAULT). |
     /// | `parent: &str`      | The name of the [`MCServer`](super::MCServer) this [`MCServerType`] was meant for.                                                                                                               |
-    pub fn new(server_type: &str, parent: &str) -> Self {
+    pub fn new(config: &Arc<Mutex<Config>>, server_type: &str, parent: &str) -> Self {
         Self {
+            config: config.clone(),
             server_type: server_type.to_string(),
             parent: parent.to_string()
         }
@@ -104,7 +112,7 @@ impl MCServerType {
 
                 // TODO check if the mcserver's type got changed
 
-                sleep(config::cooldown().await).await;
+                sleep(Config::cooldown(&self.config).await).await;
             }
         }
     }

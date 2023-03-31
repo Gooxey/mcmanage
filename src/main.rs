@@ -49,7 +49,7 @@ use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
 use common::{
-    config,
+    config::Config,
     info,
     mcmanage_error::MCManageError,
     mcserver_manager::MCServerManager
@@ -94,20 +94,6 @@ fn setup_logger() -> Result<(), fern::InitError> {
                 })
                 .level(log::LevelFilter::Info)
                 .chain(fern::log_file("logs/mcmanage.log")?)
-        )
-        .chain(
-            fern::Dispatch::new()
-                .format(move |out, message, record| {
-                    out.finish(format_args!(
-                        "{} | {:16.16} | {:5} | {}",
-                        chrono::Local::now().format("%d.%m.%Y | %H:%M:%S"),
-                        record.target(),
-                        record.level(),
-                        message
-                    ))
-                })
-                .level(log::LevelFilter::Trace)
-                .chain(fern::log_file("logs/mcmanage_detail.log")?)
         )
         .chain(
             fern::Dispatch::new()
@@ -185,9 +171,15 @@ async fn main() {
     info!("Main", "Exporting the website...");
     load_website();
 
+
+    let config = Config::new().await;
+    let communicator = Communicator::new(&config).await;
+    let mcserver_manager = MCServerManager::new(&config).await;
+
+
     let addr = SocketAddr::from((
         IpAddr::V4(Ipv4Addr::LOCALHOST),
-        config::website_port().await,
+        Config::website_port(&config).await,
     ));
     info!("Main", "Starting the webserver at 'http://{addr}'...");
 
@@ -205,10 +197,6 @@ async fn main() {
         }
     ));
     spawn(serve_website(addr, app));
-
-
-    let communicator = Communicator::new().await;
-    let mcserver_manager = MCServerManager::new().await;
 
     communicator.start();
     mcserver_manager.start();

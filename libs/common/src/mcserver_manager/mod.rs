@@ -20,7 +20,7 @@ use tokio::{
 use toml::Table;
 
 use crate::{
-    config,
+    config::Config,
     error,
     info,
     mcmanage_error::MCManageError,
@@ -42,6 +42,8 @@ pub mod server_list_example_default;
 
 // FIXME When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.toml` file, the Minecraft server can fail to start. (only when starting them via the MCServerManager)
 // TODO constantly update MCServer list
+// FIXME: Register errors, like "java.net.BindException: Address already in use: bind" from the Minecraft server and print them to the console (do not crash the application -> instead, stop Minecraft server)
+// TODO: Make the server.properties file editable
 
 /// This struct is responsible for managing all [`MCServers`](MCServer). ( starting, stopping, ... ) \
 /// In more detail, it creates [`MCServer`] structs accordingly to the `servers/server_list.toml` file. Additionally it will also start a thread which:
@@ -54,6 +56,8 @@ pub mod server_list_example_default;
 pub struct MCServerManager {
     /// This struct's name
     name: String,
+    /// The applications [`Config`]
+    config: Arc<Mutex<Config>>,
     /// The main thread of this struct
     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
     /// The [`Status`] of this struct
@@ -66,9 +70,10 @@ pub struct MCServerManager {
 }
 impl MCServerManager {
     /// Create a new [`MCServerManager`] instance.
-    pub async fn new() -> Arc<Self> {
+    pub async fn new(config: &Arc<Mutex<Config>>) -> Arc<Self> {
         Self {
             name: "MCServerManager".to_string(),
+            config: config.clone(),
             main_thread: Arc::new(None.into()),
             status: Status::Stopped.into(),
 
@@ -167,7 +172,7 @@ impl MCServerManager {
                         info!(mcserver_manager.name, "A valid 'config/server_list.toml' has been registered. The starting process will now proceed.");
                         return mcserver_list_toml;
                     } else {
-                        sleep(config::cooldown().await).await;
+                        sleep(Config::cooldown(&mcserver_manager.config).await).await;
                     }
                 }
             }
@@ -188,7 +193,7 @@ impl MCServerManager {
                     warned_about_empty_list = true;
                 }
                 mcserver_list_toml = wait_for_valid_server_list(self).await;
-                sleep(config::cooldown().await).await;
+                sleep(Config::cooldown(&self.config).await).await;
                 continue;
             }
 
@@ -206,14 +211,14 @@ impl MCServerManager {
                         warned_about_empty_list = false;
                         finished_reading_list = false;
                         mcserver_list_toml = wait_for_valid_server_list(self).await;
-                        sleep(config::cooldown().await).await;
+                        sleep(Config::cooldown(&self.config).await).await;
                         break;
                     }
 
                     let name = key;
                     let restart_time = server_item.restart_time;
 
-                    mcserver_list.push(MCServer::new(name, server_item).await);
+                    mcserver_list.push(MCServer::new(name, &self.config, server_item).await);
                     restart_times.push(restart_time);
                 }
             }
@@ -263,9 +268,9 @@ impl MCServerManager {
             }
 
             // shut down the computer running this application if configured
-            if config::shutdown_time().await > Duration::new(0, 0) {
+            if Config::shutdown_time(&self.config).await > Duration::new(0, 0) {
                 if let Some(offline_counter) = offline_counter {
-                    let shutdown_time = config::shutdown_time().await;
+                    let shutdown_time = Config::shutdown_time(&self.config).await;
                     if Instant::now() - offline_counter >= shutdown_time {
                         info!(self.name, "No player was active for {:?}. This machine will now shut down.", shutdown_time);
                         system_shutdown::shutdown().expect("Could not shutdown this machine.");
@@ -289,7 +294,7 @@ impl MCServerManager {
                 }
             }
 
-            sleep(config::cooldown().await).await;
+            sleep(Config::cooldown(&self.config).await).await;
         }
     }
 }

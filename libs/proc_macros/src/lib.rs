@@ -80,7 +80,7 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 /// };
 /// 
 /// use crate::{    // if you use this derive macro inside another library, replace `crate` with `common`
-///     config,
+///     config::Config,
 ///     error,
 ///     info,
 ///     mcmanage_error::MCManageError,
@@ -93,6 +93,8 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 /// struct MyConcurrentStruct {
 ///     /// This struct's name
 ///     name: String,
+///     /// The applications [`Config`]
+///     config: Arc<Mutex<Config>>,
 ///     /// The main thread of this struct
 ///     main_thread: Arc<Mutex<Option<ThreadJoinHandle>>>,
 ///     /// The [`Status`] of this struct
@@ -101,9 +103,10 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 /// // The following methods HAVE TO be implemented, otherwise the application will panic
 /// impl MyConcurrentStruct {
 ///     /// Create a new [`MyConcurrentStruct`] instance.
-///     pub async fn new() -> Arc<Self> {
+///     pub async fn new(config: &Arc<Mutex<Config>>) -> Arc<Self> {
 ///         Self {
 ///             name: "MyConcurrentStruct".to_string(),
+///             config: config.clone(),
 ///             main_thread: Arc::new(None.into()),
 ///             status: Status::Stopped.into()
 ///         }

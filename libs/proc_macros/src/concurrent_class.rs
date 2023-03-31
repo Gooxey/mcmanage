@@ -45,7 +45,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                             if let MCManageError::FatalError = erro {
                                 break;
                             }
-                            tokio::time::sleep(config::cooldown().await).await;
+                            tokio::time::sleep(Config::cooldown(&self.config).await).await;
                         }
                     }
                 }
@@ -55,7 +55,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                 // ### STARTING ###
 
                 // Try to start the class until it succeeds or the fail limit is reached
-                let max_tries = config::max_tries().await;
+                let max_tries = Config::max_tries(&self.config).await;
                 for i in 0..max_tries {
                     if let Err(erro) = self.clone().impl_start(true).await {
                         error!(self.name, "Encountered an error while starting. Error: {}", erro);
@@ -65,7 +65,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                             panic!("The maximum number of start attempts has been reached. {} will no longer attempt to start.", self.name)
                         }
 
-                        tokio::time::sleep(config::cooldown().await).await;
+                        tokio::time::sleep(Config::cooldown(&self.config).await).await;
                     } else {
                         break;
                     }
@@ -164,7 +164,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                         if let Status::Started = *self.status.lock().await {
                             break;
                         }
-                        tokio::time::sleep(config::cooldown().await).await;
+                        tokio::time::sleep(Config::cooldown(&self.config).await).await;
                     }
                 }
 
