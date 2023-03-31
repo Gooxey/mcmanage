@@ -27,7 +27,8 @@ First, you have to install [rust](https://www.rust-lang.org/tools/install). See 
 Next, you need to install [trunk](https://trunkrs.dev/#install).
 
 ```bash
-# Note that this is just one of multiple ways to install trunk. For a full list, see https://trunkrs.dev/#install
+# Note that this is just one of multiple ways to install trunk.
+# For a full list, see https://trunkrs.dev/#install
 cargo install --locked trunk
 ```
 
