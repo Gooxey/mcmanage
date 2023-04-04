@@ -1,6 +1,6 @@
 use std::{
-    process::Command,
     error::Error,
+    process::Command,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -10,14 +10,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         res.set_icon("icon.ico");
         res.compile()?;
     }
-    
+
     // Change to the frontend application directory
     let yew_app_dir = "frontend";
     if let Err(e) = std::env::set_current_dir(yew_app_dir) {
         eprintln!("Failed to change directory to {}: {}", yew_app_dir, e);
         std::process::exit(1);
     }
-    
+
     // Run trunk build --release
     let trunk_build = Command::new("trunk")
         .args(["build", "--release"])

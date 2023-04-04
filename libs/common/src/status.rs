@@ -1,10 +1,9 @@
 //! This module provides the [`Status enum`](Status), which gets used for the representation of the status of structs implementing the [`ConcurrentClass`](proc_macros::ConcurrentClass) proc macro.
 
-
 /// This enum represents the status of structs implementing the [`ConcurrentClass`](proc_macros::ConcurrentClass) proc macro.
-/// 
+///
 /// # Variant
-/// 
+///
 /// | Variant                            | Description                                                                                                                   |
 /// |------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
 /// | [`Stopped`](Status::Stopped)       | The struct is currently inactive. Therefore, any operation other than the start method is not possible to use.                |
@@ -23,5 +22,5 @@ pub enum Status {
     /// The struct is currently stopping. Before doing anything, wait for the status to change to [`Stopped`](Status::Stopped).
     Stopping,
     /// The struct is currently restarting. Wait for the status to change to [`Started`](Status::Started) for full functionality.
-    Restarting
+    Restarting,
 }

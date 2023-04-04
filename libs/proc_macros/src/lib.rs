@@ -4,72 +4,27 @@
 #![warn(clippy::missing_docs_in_private_items)]
 #![warn(clippy::unwrap_used)]
 
-
 use proc_macro::{
+    self,
     TokenStream,
-    self
 };
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
-
-mod match_command;
 mod concurrent_class;
 mod convert;
 mod toml_convert;
 
-
-/// This derive macro generates a function called `execute` which can be used to execute an asynchronous function associated with the variant of a given enum called
-/// `execute_<variant name>`. \
-/// \
-/// Note: This macro MUST be used inside the `common library` and run inside a `tokio runtime` since the methods of each variant are asynchronous.
-/// 
-/// # Example
-/// 
-/// ```compile_fail
-/// use proc_macros::MatchCommand;
-/// use crate::{
-///     mcmanage_error::MCManageError,
-///     communicator::message::command::permission::Permission
-/// };
-/// 
-/// // A Args struct can either be empty...
-/// struct StartArgs;
-/// 
-/// // ...or it can be filled with fields as long as it implements the Convert trait from the common library
-/// struct StopArgs {
-///     delay_in_secs: i32
-/// }
-/// 
-/// #[derive(MatchCommand, Clone)]  // the clone trait must be implemented
-/// enum Command {
-///     Start(StartArgs),   // only one parameter is allowed, and it has to be a struct called `<variant name>Args`
-///     Stop(StopArgs)
-/// }
-/// impl Command {  // here we have to create asynchronous methods called `execute<variant name>` for every variant
-///     pub async fn execute_Start(self, args: StartArgs) {
-///         // some code which will be executed when `Command::Start(StartArgs).execute()` gets executed
-///     }
-///     pub async fn execute_Stop(self, args: StopArgs) {
-///         // some code which will be executed when `Command::Stop(StopArgs{delay_in_secs:3}).execute()` gets executed
-///     }
-/// }
-/// ```
-#[proc_macro_derive(MatchCommand)]
-pub fn derive_match_command(input: TokenStream) -> TokenStream {
-    match_command::match_command(input)
-}
-
 /// This trait provides standard functions used by every concurrent struct in the [`MCManage network`](https://github.com/Gooxey/MCManage.git). \
-/// 
+///
 /// # Example
-/// 
+///
 /// ```compile_fail
 /// use std::{
 ///     sync::Arc,
 ///     time::Instant
 /// };
-/// 
+///
 /// use proc_macros::ConcurrentClass;
 /// use tokio::{
 ///     sync::{
@@ -78,7 +33,7 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 ///     },
 ///     task::JoinHandle
 /// };
-/// 
+///
 /// use crate::{    // if you use this derive macro inside another library, replace `crate` with `common`
 ///     config::Config,
 ///     error,
@@ -87,8 +42,8 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 ///     status::Status,
 ///     types::ThreadJoinHandle
 /// };
-/// 
-/// 
+///
+///
 /// #[derive(ConcurrentClass)]
 /// struct MyConcurrentStruct {
 ///     /// This struct's name
@@ -157,11 +112,11 @@ pub fn derive_match_command(input: TokenStream) -> TokenStream {
 ///     /// This represents the main loop of a given struct.
 ///     async fn main(self: Arc<Self>, mut bootup_result: Option<oneshot::Sender<()>>) -> Result<(), MCManageError> {
 ///         self.send_start_result(&mut bootup_result).await?;
-/// 
+///
 ///         loop {
 ///             todo!()
 ///         }
-/// 
+///
 ///         Ok(())
 ///     }
 /// }
@@ -171,19 +126,19 @@ pub fn derive_concurrent_class(input: TokenStream) -> TokenStream {
     concurrent_class::concurrent_class(input)
 }
 
-/// This derive macro allows a struct or enum to be converted from and into [`json-objects`](serde_json::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This derive macro allows a struct or enum to be converted from and into `json-objects`, `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods. \
 /// \
 /// Note: Using the [`add_convert`](macro@add_convert) proc attribute significantly reduces the amount of boilerplate code.
-/// 
+///
 /// # Example
-/// 
+///
 /// Cargo.toml:
 /// ```toml
 /// serde = { version = "1.0.155", features = ["derive"] }
 /// # A Dependency to this crate is also required
 /// ```
-/// 
+///
 /// Rust code:
 /// ```compile_fail
 /// use proc_macros::Convert;
@@ -192,8 +147,8 @@ pub fn derive_concurrent_class(input: TokenStream) -> TokenStream {
 ///     Serialize
 /// };
 /// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
-/// 
-/// 
+///
+///
 /// #[derive(Convert, Deserialize, Serialize)]
 /// struct MyConvertibleStruct {
 ///     text: String,
@@ -205,23 +160,23 @@ pub fn derive_convert(input: TokenStream) -> TokenStream {
     convert::convert(input)
 }
 
-/// This attribute allows a struct or enum to be converted from and into [`json-objects`](serde_json::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This attribute allows a struct or enum to be converted from and into `json-objects`, `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods.
-/// 
+///
 /// # Example
-/// 
+///
 /// Cargo.toml:
 /// ```toml
 /// serde = { version = "1.0.155", features = ["derive"] }
 /// # A Dependency to this crate is also required
 /// ```
-/// 
+///
 /// Rust code:
 /// ```compile_fail
 /// use proc_macros::add_convert;
 /// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
-/// 
-/// 
+///
+///
 /// #[add_convert]
 /// struct MyConvertibleStruct {
 ///     text: String,
@@ -239,19 +194,19 @@ pub fn add_convert(_: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// This derive macro allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This derive macro allows a struct or enum to be converted from and into `toml-objects`, `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods. \
 /// \
 /// Note: Using the [`add_convert`](macro@add_convert) proc attribute significantly reduces the amount of boilerplate code.
-/// 
+///
 /// # Example
-/// 
+///
 /// Cargo.toml:
 /// ```toml
 /// serde = { version = "1.0.155", features = ["derive"] }
 /// # A Dependency to this crate is also required
 /// ```
-/// 
+///
 /// Rust code:
 /// ```compile_fail
 /// use proc_macros::TomlConvert;
@@ -260,8 +215,8 @@ pub fn add_convert(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     Serialize
 /// };
 /// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
-/// 
-/// 
+///
+///
 /// #[derive(TomlConvert, Deserialize, Serialize)]
 /// struct MyConvertibleStruct {
 ///     text: String,
@@ -273,23 +228,23 @@ pub fn derive_toml_convert(input: TokenStream) -> TokenStream {
     toml_convert::toml_convert(input)
 }
 
-/// This attribute allows a struct or enum to be converted from and into [`toml-objects`](toml::Value), `strings` and `byte-strings` using the `try_from()` and
+/// This attribute allows a struct or enum to be converted from and into `toml-objects`, `strings` and `byte-strings` using the `try_from()` and
 /// `try_into()` methods.
-/// 
+///
 /// # Example
-/// 
+///
 /// Cargo.toml:
 /// ```toml
 /// serde = { version = "1.0.155", features = ["derive"] }
 /// # A Dependency to this crate is also required
 /// ```
-/// 
+///
 /// Rust code:
 /// ```compile_fail
 /// use proc_macros::add_toml_convert;
 /// use crate::mcmanage_error::MCManageError;   // if you use this derive macro inside another library, replace `crate` with `common`
-/// 
-/// 
+///
+///
 /// #[add_toml_convert]
 /// struct MyConvertibleStruct {
 ///     text: String,

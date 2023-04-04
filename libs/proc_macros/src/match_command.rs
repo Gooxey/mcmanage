@@ -1,25 +1,23 @@
 //! This module provides the code for the [`macro@MatchCommand`](super::MatchCommand) macro.
 
-
 use proc_macro::{
+    self,
     TokenStream,
-    self
 };
 use proc_macro2::Span;
 use quote::{
     format_ident,
     quote,
-    quote_spanned
+    quote_spanned,
 };
 use syn::{
+    parse_macro_input,
+    spanned::Spanned,
     Data::Enum,
     DeriveInput,
-    Error, 
+    Error,
     Fields,
-    parse_macro_input,
-    spanned::Spanned
 };
-
 
 /// This function implements the [`macro@MatchCommand`](super::MatchCommand) macro.
 pub fn match_command(input: TokenStream) -> TokenStream {
@@ -32,7 +30,6 @@ pub fn match_command(input: TokenStream) -> TokenStream {
 
     let where_clause = &generics.where_clause;
 
-
     let mut exec = quote! {};
     match data {
         Enum(command_enum) => {
@@ -41,7 +38,8 @@ pub fn match_command(input: TokenStream) -> TokenStream {
                 let variant_name_string = variant_name_ident.to_string();
 
                 // generate the names for functions and structs associated with this variant
-                let mut variant_function_name = format_ident!("execute_{}", variant_name_string.to_lowercase());
+                let mut variant_function_name =
+                    format_ident!("execute_{}", variant_name_string.to_lowercase());
                 variant_function_name.set_span(variant_name_ident.span());
                 let mut variant_args_name = format_ident!("{}Args", variant_name_string);
                 variant_args_name.set_span(variant_name_ident.span());
@@ -50,9 +48,13 @@ pub fn match_command(input: TokenStream) -> TokenStream {
                 let args = if let Fields::Unnamed(_) = &variant.fields {
                     quote_spanned! {variant.span() => args}
                 } else {
-                    return Error::new(Span::call_site(), "Only variants of the following syntax are allowed: `Start(T: Convert)`").to_compile_error().into();
+                    return Error::new(
+                        Span::call_site(),
+                        "Only variants of the following syntax are allowed: `Start(T: Convert)`",
+                    )
+                    .to_compile_error()
+                    .into();
                 };
-
 
                 // generate the code for this variant
                 let exec_code = quote_spanned! {variant.span()=>
@@ -67,8 +69,15 @@ pub fn match_command(input: TokenStream) -> TokenStream {
                     #exec_code
                 };
             }
-        },
-        _ => return Error::new(Span::call_site(), "MatchCommand is only available for enums!").to_compile_error().into(),
+        }
+        _ => {
+            return Error::new(
+                Span::call_site(),
+                "MatchCommand is only available for enums!",
+            )
+            .to_compile_error()
+            .into()
+        }
     };
 
     // implement the code generated for this enum
@@ -76,20 +85,7 @@ pub fn match_command(input: TokenStream) -> TokenStream {
         impl #generics #struct_name_ident #generics #where_clause {
             /// Execute an asynchronous function associated with the variant of a given enum. \
             /// If the client lacks the permission to execute a given command, this method will return an error of kind [`MCManageError::MissingPermission`].
-            pub fn execute(&self, client_type: &ClientType) -> Result<(), MCManageError> {
-                match client_type {
-                    ClientType::User => {
-                        if let Permission::Worker = self.permission() {
-                            return Err(MCManageError::MissingPermission)
-                        }
-                    }
-                    ClientType::Worker => {
-                        if let Permission::User = self.permission() {
-                            return Err(MCManageError::MissingPermission)
-                        }
-                    }
-                }
-
+            pub fn execute(&self) -> Result<(), MCManageError> {
                 match self {
                     #exec
                 }

@@ -1,71 +1,69 @@
 //! This module provides the [`MCServer struct`](MCServer) which represents an API for one Minecraft server, which got assigned with the initiation of this struct.
 
-
 use std::{
-    io::ErrorKind,
-    path::Path,
+    path::{
+        Path,
+        PathBuf,
+    },
     process::Stdio,
     sync::Arc,
-    time::Instant
+    time::Instant,
 };
 
-use futures_util::StreamExt;
 use async_recursion::async_recursion;
+use futures_util::StreamExt;
 use proc_macros::ConcurrentClass;
 use tokio::{
     fs::{
+        self,
         File,
-        self, OpenOptions
+        OpenOptions,
     },
     io::{
+        self,
         AsyncBufReadExt,
+        AsyncReadExt,
         AsyncWriteExt,
-        BufReader, self, AsyncReadExt
+        BufReader,
     },
     process::{
         Child,
         ChildStdout,
-        Command
+        Command,
     },
     sync::{
+        oneshot,
         Mutex,
-        oneshot
     },
-    time::sleep
-};
-
-use crate::{
-    config::Config,
-    error,
-    info,
-    mcmanage_error::MCManageError,
-    qol::load_toml_file::load_toml,
-    status::Status,
-    types::ThreadJoinHandle,
-    warn
+    time::sleep,
 };
 
 use self::mcserver_type::MCServerType;
-
-use super::{server_item::ServerItem, server_list_example_default::SERVER_LIST_EXAMPLE_DEFAULT};
-
+use super::server_item::ServerItem;
+use crate::{
+    config::Config,
+    error,
+    generated_files::{
+        load_toml_file::load_toml,
+        paths::{
+            SERVERS_DIR,
+            SERVER_LIST_FILE,
+            SERVER_LOGS_DIR,
+        },
+    },
+    info,
+    mcmanage_error::MCManageError,
+    status::Status,
+    types::ThreadJoinHandle,
+    warn,
+};
 
 pub mod mcserver_type;
 mod tests;
 
 // TODO cancel download jar if stop or reset gets called
 
-
-/// This struct represents an API for one Minecraft server, which got assigned with the initiation of this struct. \
-/// 
-/// # Features
-/// 
-/// - The log of the Minecraft server running gets saved to 'logs/servers/<name of this server>.txt'.
-/// - Lines of text can be sent to the Minecraft server.
-/// - The names of the players currently on the Minecraft server get saved.
-/// - The [`status`](Status) of the Minecraft server gets saved. ( Starting, Stopping, ... )
-/// - Automatically agrees to the EULA if activated in the [`config`](config::agree_to_eula).
-/// - Downloads the server jar if needed from a link specified in the 'config/server_list.toml'
+/// This struct represents an API for one Minecraft server, which got assigned with the initiation of this struct.
 #[derive(ConcurrentClass)]
 pub struct MCServer {
     /// This struct's name
@@ -86,13 +84,17 @@ pub struct MCServer {
     /// This holds the Minecraft server process
     minecraft_server: Mutex<Option<Child>>,
     /// The path to the Minecraft server
-    path: String,
+    path: PathBuf,
     /// A list of all players on the Minecraft server
-    players: Mutex<Vec<String>>
+    players: Mutex<Vec<String>>,
 }
 impl MCServer {
     /// Create a new [`MCServer`] instance.
-    pub async fn new(name: &str, config: &Arc<Mutex<Config>>, server_item: ServerItem) -> Arc<Self> {
+    pub async fn new(
+        name: &str,
+        config: &Arc<Mutex<Config>>,
+        server_item: ServerItem,
+    ) -> Arc<Self> {
         Self {
             name: name.to_owned(),
             config: config.clone(),
@@ -103,8 +105,8 @@ impl MCServer {
             download_from: server_item.download_from.into(),
             mcserver_type: MCServerType::new(config, &server_item.mcserver_type, name),
             minecraft_server: None.into(),
-            path: format!("servers/{}", name),
-            players: vec![].into()
+            path: SERVERS_DIR.join(name),
+            players: vec![].into(),
         }
         .into()
     }
@@ -124,7 +126,9 @@ impl MCServer {
     pub async fn impl_start(self: Arc<Self>, restart: bool) -> Result<(), MCManageError> {
         self.check_allowed_start(restart).await?;
 
-        if !restart { info!(self.name, "Starting..."); }
+        if !restart {
+            info!(self.name, "Starting...");
+        }
         let start_time = Instant::now();
         self.download_jar().await;
 
@@ -136,7 +140,12 @@ impl MCServer {
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
-                .unwrap_or_else(|erro| panic!("An error occurred while starting the Minecraft Server {}. Error: {erro}", self.name))
+                .unwrap_or_else(|erro| {
+                    panic!(
+                        "An error occurred while starting the Minecraft Server {}. Error: {erro}",
+                        self.name
+                    )
+                }),
         );
 
         let rx = self.start_main_thread().await;
@@ -145,7 +154,13 @@ impl MCServer {
             *self.status.lock().await = Status::Started;
         }
 
-        if !restart { info!(self.name, "Started in {:.3} secs!", start_time.elapsed().as_secs_f64()); }
+        if !restart {
+            info!(
+                self.name,
+                "Started in {:.3} secs!",
+                start_time.elapsed().as_secs_f64()
+            );
+        }
         Ok(())
     }
     /// This method will check if a server jar exists. If no jar file was detected, the one from the configured link will be downloaded. In the event that neither a jar file
@@ -157,10 +172,10 @@ impl MCServer {
             let args_len = args.len();
             for (i, arg) in args.iter().enumerate() {
                 if arg == "-jar" {
-                    if i+1 == args_len {
+                    if i + 1 == args_len {
                         return "".to_string();
                     }
-                    jar_name = args[i+1].clone();
+                    jar_name = args[i + 1].clone();
                     if !jar_name.contains(".jar") {
                         return "".to_string();
                     }
@@ -172,13 +187,7 @@ impl MCServer {
         /// This function will read the `config/mcserver_list.toml` file and return the current [`ServerItem`].
         async fn get_current_server_item(mcserver: &Arc<MCServer>) -> Option<ServerItem> {
             let mcserver_list_toml;
-            if let Ok(toml) = load_toml(
-                "config",
-                "server_list",
-                SERVER_LIST_EXAMPLE_DEFAULT,
-                &mcserver.name,
-                false
-            ).await {
+            if let Ok(toml) = load_toml(&SERVER_LIST_FILE, &mcserver.name, false).await {
                 mcserver_list_toml = toml;
             } else {
                 return None;
@@ -199,10 +208,10 @@ impl MCServer {
             server_item
         }
         /// This function will wait for a file or download link to be set.
-        async fn wait_for_jar_content(mcserver: &Arc<MCServer>, jar_path: &String) {
+        async fn wait_for_jar_content(mcserver: &Arc<MCServer>, jar_path: &Path) {
             loop {
                 // Scan for a jar file
-                if Path::exists(Path::new(jar_path)) {
+                if jar_path.exists() {
                     info!(mcserver.name, "Registered a jar file. This MCServer will now continue its starting procedure.");
                     return;
                 }
@@ -219,15 +228,21 @@ impl MCServer {
             }
         }
 
-
         let mut jar_name = get_jar_name(&*self.args.lock().await);
         if jar_name == *"" {
-            error!(self.name, "No Minecraft server jar name has been defined for this MCServer. Please configure one in the 'config/server_list.toml' file.");
-            error!(self.name, "This MCServer will now wait for a jar name to be set.");
+            error!(self.name, "No Minecraft server jar name has been defined for this MCServer. Please configure one in the '{}' file.", SERVER_LIST_FILE.display());
+            error!(
+                self.name,
+                "This MCServer will now wait for a jar name to be set."
+            );
 
             loop {
                 if let Some(server_item) = get_current_server_item(self).await {
-                    let args = server_item.args.split(' ').map(String::from).collect::<Vec<String>>();
+                    let args = server_item
+                        .args
+                        .split(' ')
+                        .map(String::from)
+                        .collect::<Vec<String>>();
                     if *self.args.lock().await != args {
                         jar_name = get_jar_name(&args);
 
@@ -243,19 +258,28 @@ impl MCServer {
             }
         }
 
-        let jar_path = format!("{}/{}", self.path, jar_name);
+        let jar_path = self.path.join(jar_name);
         if !Path::exists(Path::new(&jar_path)) {
             if *self.download_from.lock().await == *"" {
-                error!(self.name, "Could not find a jar file or a link to download the jar file from.");
-                error!(self.name, "Please copy a valid jar file to '{jar_path}' or set a download link for this server in 'config/server_list.toml'.");
-                error!(self.name, "This MCServer will now wait for a file or download link to be set.");
+                error!(
+                    self.name,
+                    "Could not find a jar file or a link to download the jar file from."
+                );
+                error!(self.name, "Please copy a valid jar file to '{}' or set a download link for this server in '{}'.", jar_path.display(), SERVER_LIST_FILE.display());
+                error!(
+                    self.name,
+                    "This MCServer will now wait for a file or download link to be set."
+                );
 
                 wait_for_jar_content(self, &jar_path).await;
                 if Path::exists(Path::new(&jar_path)) {
                     return;
                 }
             } else {
-                info!(self.name, "No jar file could be found. Downloading a new one...");
+                info!(
+                    self.name,
+                    "No jar file could be found. Downloading a new one..."
+                );
             }
 
             let mut server_jar_option = None;
@@ -276,7 +300,10 @@ impl MCServer {
                                 return;
                             }
                         } else {
-                            warn!(self.name, "Failed to download the server jar. Error: {erro}");
+                            warn!(
+                                self.name,
+                                "Failed to download the server jar. Error: {erro}"
+                            );
                             warn!(self.name, "This was attempt {i} out of {max_tries}.");
 
                             if i == max_tries {
@@ -286,13 +313,22 @@ impl MCServer {
                     }
                 }
             }
-            let mut server_jar = server_jar_option
-                .unwrap_or_else(|| panic!("The server jar could not be downloaded after {max_tries} attempts."));
+            let mut server_jar = server_jar_option.unwrap_or_else(|| {
+                panic!("The server jar could not be downloaded after {max_tries} attempts.")
+            });
 
-            fs::create_dir_all(&self.path).await
-                .unwrap_or_else(|erro| panic!("Failed to create the path '{}'. Error: {erro}", self.path));
-            let mut jar_file = File::create(&jar_path).await
-                .unwrap_or_else(|erro| panic!("Failed to create the file '{jar_path}'. Error: {erro}"));
+            fs::create_dir_all(&self.path).await.unwrap_or_else(|erro| {
+                panic!(
+                    "Failed to create the path '{}'. Error: {erro}",
+                    self.path.display()
+                )
+            });
+            let mut jar_file = File::create(&jar_path).await.unwrap_or_else(|erro| {
+                panic!(
+                    "Failed to create the file '{}'. Error: {erro}",
+                    jar_path.display()
+                )
+            });
 
             while let Some(item) = server_jar.next().await {
                 io::copy(
@@ -309,21 +345,36 @@ impl MCServer {
     /// this method to be executed during a restart. \
     /// \
     /// The `forced` parameter is used to wait for a given struct to start / stop to ensure a stop attempt.
-    pub async fn impl_stop(self: Arc<Self>, restart: bool, forced: bool) -> Result<(), MCManageError> {
+    pub async fn impl_stop(
+        self: Arc<Self>,
+        restart: bool,
+        forced: bool,
+    ) -> Result<(), MCManageError> {
         self.check_allowed_stop(restart, forced).await?;
 
-        if !restart { info!(self.name, "Shutting down..."); }
+        if !restart {
+            info!(self.name, "Shutting down...");
+        }
         let stop_time = Instant::now();
 
-        if let Some(mut minecraft_server ) = self.minecraft_server.lock().await.take() {
+        if let Some(mut minecraft_server) = self.minecraft_server.lock().await.take() {
             let send_stop_result = minecraft_server
-                .stdin.as_mut()
-                .unwrap_or_else(|| panic!("The Minecraft server process of {} should have a stdin pipe.", self.name))
-                .write_all("stop\n".as_bytes()).await;
+                .stdin
+                .as_mut()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "The Minecraft server process of {} should have a stdin pipe.",
+                        self.name
+                    )
+                })
+                .write_all("stop\n".as_bytes())
+                .await;
             self.save_output(">> stop").await;
 
             if let Err(erro) = send_stop_result {
-                if !restart { warn!(self.name, "An error occurred while writing the input `stop` to the Minecraft server. The process will be kill forcefully. Error: {erro}"); }
+                if !restart {
+                    warn!(self.name, "An error occurred while writing the input `stop` to the Minecraft server. The process will be kill forcefully. Error: {erro}");
+                }
                 if (minecraft_server.kill().await).is_err() {}
             }
             if minecraft_server.wait().await.is_err() {}
@@ -336,7 +387,13 @@ impl MCServer {
             *self.status.lock().await = Status::Stopped;
         }
 
-        if !restart { info!(self.name, "Stopped in {:.3} secs!", stop_time.elapsed().as_secs_f64()); }
+        if !restart {
+            info!(
+                self.name,
+                "Stopped in {:.3} secs!",
+                stop_time.elapsed().as_secs_f64()
+            );
+        }
         Ok(())
     }
 
@@ -372,7 +429,9 @@ impl MCServer {
 
     /// Reset a given struct to its starting values.
     pub(super) async fn reset(self: &Arc<Self>) {
-        if let Some(thread) = self.main_thread.lock().await.take() {thread.abort();}
+        if let Some(thread) = self.main_thread.lock().await.take() {
+            thread.abort();
+        }
         *self.status.lock().await = Status::Stopped;
         if let Some(mut server) = self.minecraft_server.lock().await.take() {
             if (server.kill().await).is_err() {}
@@ -380,20 +439,26 @@ impl MCServer {
         *self.players.lock().await = vec![];
     }
     /// This represents the main loop of a given struct.
-    async fn main(self: Arc<Self>, mut bootup_result: Option<oneshot::Sender<()>>) -> Result<(), MCManageError> {
+    async fn main(
+        self: Arc<Self>,
+        mut bootup_result: Option<oneshot::Sender<()>>,
+    ) -> Result<(), MCManageError> {
         let mut agreed_to_eula = false;
         let stdout = BufReader::new(self.get_stdout_pipe().await);
 
         let mut lines = stdout.lines();
         loop {
             let line;
-            if let Some(content) = lines.next_line().await
-                .unwrap_or_else(|erro| panic!("An error occurred while reading the output of {}. Error: {erro}", self.name))
-            {
+            if let Some(content) = lines.next_line().await.unwrap_or_else(|erro| {
+                panic!(
+                    "An error occurred while reading the output of {}. Error: {erro}",
+                    self.name
+                )
+            }) {
                 line = content;
             } else {
                 // It will only be None returned if the Child process got killed
-                return Ok(())
+                return Ok(());
             }
 
             self.save_output(&line).await;
@@ -410,44 +475,61 @@ impl MCServer {
             self.check_player_activity(&line).await;
         }
     }
-    /// Save a given line to a log file saved under ' logs/{MCServer.name}.txt '.
+    /// Save a given line to a log file saved under ' [`SERVER_LOGS_DIR`]/{MCServer.name}.txt '.
     async fn save_output(self: &Arc<Self>, line: &str) {
-        fs::create_dir_all("logs/servers").await
-            .unwrap_or_else(|erro| panic!("An error occurred while creating the dir `logs/servers`. Error: {erro}"));
+        fs::create_dir_all(SERVER_LOGS_DIR.as_path())
+            .await
+            .unwrap_or_else(|erro| {
+                panic!(
+                    "An error occurred while creating the dir `{}`. Error: {erro}",
+                    SERVER_LOGS_DIR.display()
+                )
+            });
 
-        let destination = &format!("logs/servers/{}.log", self.name);
+        let destination = SERVER_LOGS_DIR.join(self.name.clone() + ".log");
         let mut log_file;
-        match OpenOptions::new().append(true).create(true).open(destination).await {
-            Ok(file) => {
-                log_file = file
-            }
-            Err(erro) if ErrorKind::NotFound == erro.kind() => {
-                fs::create_dir("logs").await.expect("The error ErrorKind::NotFound only gets returned if the logs dir is missing.");
-
-                log_file = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(destination).await
-                    .unwrap_or_else(|erro| panic!("Could not write to the log file {destination}. Error: {erro}"));
-            }
+        match OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(destination.clone())
+            .await
+        {
+            Ok(file) => log_file = file,
             Err(erro) => {
-                panic!("Could not write to the log file {destination}. Error: {erro}")
+                panic!(
+                    "Could not open the log file at {}. Error: {erro}",
+                    destination.display()
+                )
             }
         }
 
         log_file
-            .write_all(format!("{line}\n").as_bytes()).await
-            .unwrap_or_else(|erro| panic!("An error occurred while writing a log message to the file {destination}. Error: {erro}"));
+            .write_all(format!("{line}\n").as_bytes())
+            .await
+            .unwrap_or_else(|erro| {
+                panic!(
+                    "An error occurred while writing a log message to the file {}. Error: {erro}",
+                    destination.display()
+                )
+            });
     }
     /// Get the stdout pipe of the Minecraft server.
     async fn get_stdout_pipe(self: &Arc<Self>) -> ChildStdout {
-        self.minecraft_server.lock().await.as_mut()
+        self.minecraft_server
+            .lock()
+            .await
+            .as_mut()
             .expect("This method should only be called once the Minecraft server process got set.")
-            .stdout.take()
+            .stdout
+            .take()
             .expect("The stdout pipe of this server only gets taken once.")
     }
     /// Check if the Minecraft server has started.
-    async fn check_started(self: &Arc<Self>, line: &str, bootup_result: oneshot::Sender<()>) -> Option<oneshot::Sender<()>> {
+    async fn check_started(
+        self: &Arc<Self>,
+        line: &str,
+        bootup_result: oneshot::Sender<()>,
+    ) -> Option<oneshot::Sender<()>> {
         for item in self.mcserver_type.get_started().await {
             if !line.contains(&item) {
                 return Some(bootup_result);
@@ -481,11 +563,21 @@ impl MCServer {
         let mut players = self.players.lock().await;
         if player_joined {
             players.push(
-                self.mcserver_type.get_player_name_joined(line).await.unwrap_or_else(|_| panic!("It has already been checked whether or not a player joined."))
+                self.mcserver_type
+                    .get_player_name_joined(line)
+                    .await
+                    .unwrap_or_else(|_| {
+                        panic!("It has already been checked whether or not a player joined.")
+                    }),
             );
         } else if player_left {
-            let player_name = self.mcserver_type.get_player_name_left(line).await
-                .unwrap_or_else(|_| panic!("It has already been checked whether or not a player left."));
+            let player_name = self
+                .mcserver_type
+                .get_player_name_left(line)
+                .await
+                .unwrap_or_else(|_| {
+                    panic!("It has already been checked whether or not a player left.")
+                });
             if let Ok(index) = players.binary_search(&player_name) {
                 players.remove(index);
             } else {
@@ -498,12 +590,21 @@ impl MCServer {
     /// If this setting is deactivated by the user, this function will send a message informing the user of the situation and then shut down the [`MCServer`] calling this
     /// function.
     async fn agree_to_eula(self: &Arc<Self>) {
+        let eula_path = self.path.join("eula.txt");
+
         // check if the EULA has been accepted
-        if Path::new(&(self.path.clone() + "/eula.txt")).exists() {
+        if eula_path.exists() {
             let mut eula_txt = "".to_string();
-            if File::open(self.path.clone() + "/eula.txt").await
-                .unwrap_or_else(|_| panic!("It was already checked whether or not the {} file exists.", self.path.clone() + "/eula.txt"))
-                .read_to_string(&mut eula_txt).await
+            if File::open(&eula_path)
+                .await
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "It was already checked whether or not the file at {} exists.",
+                        eula_path.display()
+                    )
+                })
+                .read_to_string(&mut eula_txt)
+                .await
                 .is_err()
             {}
 
@@ -511,14 +612,26 @@ impl MCServer {
                 return;
             }
         }
-        warn!(self.name, "The EULA has to be accepted to use this MCServer.");
+        warn!(
+            self.name,
+            "The EULA has to be accepted to use this MCServer."
+        );
 
         // agree to the EULA if configured
         if Config::agree_to_eula(&self.config).await {
-            File::create(self.path.clone() + "/eula.txt").await
-                .unwrap_or_else(|erro| panic!("Failed to open the EULA file of {}. Error: {erro}", self.name))
-                .write_all(b"eula=true").await
-                .unwrap_or_else(|erro| panic!("Failed to accept the EULA of {}. Error: {erro}", self.name));
+            File::create(eula_path)
+                .await
+                .unwrap_or_else(|erro| {
+                    panic!(
+                        "Failed to open the EULA file of {}. Error: {erro}",
+                        self.name
+                    )
+                })
+                .write_all(b"eula=true")
+                .await
+                .unwrap_or_else(|erro| {
+                    panic!("Failed to accept the EULA of {}. Error: {erro}", self.name)
+                });
 
             info!(self.name, "#########################################################################################################################");
             info!(self.name, "# The following line is copied from the Minecraft Servers eula.txt file.                                                #");

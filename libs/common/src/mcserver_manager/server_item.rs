@@ -1,12 +1,10 @@
 //! This module provides the [`ServerItem`] struct which represents a [`MCServer`](super::mcserver::MCServer) defined in the `config/server_list.toml` file.
 
-
 use std::time::Duration;
 
 use proc_macros::add_toml_convert;
 
 use crate::mcmanage_error::MCManageError;
-
 
 /// This struct represents a [`MCServer`](super::mcserver::MCServer) defined in the `config/server_list.toml` file.
 #[add_toml_convert]
@@ -25,5 +23,5 @@ pub struct ServerItem {
     pub mcserver_type: String,
     /// This is the amount of time the application should wait between restarts of this Minecraft server.
     /// If both the secs and nanos values are 0, no restarts will be performed.
-    pub restart_time: Duration
+    pub restart_time: Duration,
 }

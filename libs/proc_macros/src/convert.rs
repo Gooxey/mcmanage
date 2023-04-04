@@ -1,10 +1,11 @@
 //! This module provides the implementation for the [`macro@convert`](super::convert) macro.
 
-
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
-
+use syn::{
+    parse_macro_input,
+    DeriveInput,
+};
 
 /// This function implements the [`macro@convert`](super::convert) macro.
 pub fn convert(input: TokenStream) -> TokenStream {

@@ -1,7 +1,7 @@
 [package]
 name = "frontend"
 authors = ["Gooxey"]
-description = "TODO"
+description = "This application is aiming to make the creation and management of Minecraft servers as easy as possible."
 edition = "2021"
 license-file = "../LICENSE"
 readme = "../README.md"
@@ -12,4 +12,12 @@ version = "0.1.0"
 
 
 [dependencies]
+chrono = "0.4.24"
+console_log = { version = "1.0.0", features = ["color"] }
+fern = { version = "0.6.2", features = ["colored"] }
+log = "0.4.17"
+reqwasm = "0.5.0"
+serde = { version = "1.0.159", features = ["derive"] }
+serde_json = "1.0.95"
+wasm-bindgen-futures = "0.4.34"
 yew = { version = "0.20.0", features = ["csr"] }

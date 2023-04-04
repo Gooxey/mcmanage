@@ -1,85 +1,81 @@
 //! This module provides the [`Communicator`] of the MCManage application. \
 //! It accepts new connections from the MCManage network and manages the sending and receiving of [`messages`](common::communicator::message::Message).
 
-
 use std::{
     net::{
         IpAddr,
         Ipv4Addr,
-        SocketAddr
+        SocketAddr,
     },
     sync::Arc,
     time::{
+        Duration,
         Instant,
-        Duration
     },
 };
 
 use async_trait::async_trait;
-use proc_macros::ConcurrentClass;
-use tokio::{
-    io::{
-        AsyncWriteExt,
-        self
-    },
-    net::{
-        tcp::{
-            ReadHalf,
-            WriteHalf
-        },
-        TcpStream,
-        TcpListener
-    },
-    spawn,
-    time::sleep,
-    try_join
-};
-use tokio::sync::{
-    Mutex,
-    mpsc::{
-        channel,
-        Sender,
-        Receiver
-    },
-    oneshot
-};
 use common::{
     communicator::{
         client_type::ClientType,
         message::{
             command::{
-                Command,
                 get_type::GetTypeArgs,
-                set_id::SetIdArgs
+                set_id::SetIdArgs,
+                Command,
             },
+            message_type::MessageType,
             Message,
-            message_type::MessageType
         },
-        CommunicatorTrait
+        CommunicatorTrait,
     },
     config::Config,
     error,
     info,
     mcmanage_error::MCManageError,
     status::Status,
-    types::ThreadJoinHandle
+    types::ThreadJoinHandle,
+};
+use proc_macros::ConcurrentClass;
+use tokio::{
+    io::{
+        self,
+        AsyncWriteExt,
+    },
+    net::{
+        tcp::{
+            ReadHalf,
+            WriteHalf,
+        },
+        TcpListener,
+        TcpStream,
+    },
+    spawn,
+    sync::{
+        mpsc::{
+            channel,
+            Receiver,
+            Sender,
+        },
+        oneshot,
+        Mutex,
+    },
+    time::sleep,
+    try_join,
 };
 
 use self::{
+    intercom::InterCom,
     reserved_connections::ReservedConnections,
-    intercom::InterCom
 };
 
-
-mod tests;
-mod reserved_connections;
 mod intercom;
-
+mod reserved_connections;
+mod tests;
 
 // TODO send encrypted messages
 
-/// This struct manages the communication between this application and other ones connected to it via a socket connection. In this case, there are two kinds of connected
-/// clients: the [`Worker`](ClientType::Worker) and the [`User`](ClientType::User). For every new client, a new [`handler`](Self::handler)
+/// This struct manages the communication between this application and Workers connected to it via a socket connection. For every new client, a new [`handler`](Self::handler)
 /// gets started, which is responsible for sending [`Messages`](common::communicator::message::Message) stored inside the internal buffer and executing the ones received from
 /// the client.
 #[derive(ConcurrentClass)]
@@ -100,7 +96,7 @@ pub struct Communicator {
     /// A list of all users
     users: Mutex<Vec<Option<(u64, ClientType)>>>,
     /// This holds a struct, which is in itself a list of all workers
-    workers: ReservedConnections
+    workers: ReservedConnections,
 }
 #[async_trait]
 impl CommunicatorTrait for Communicator {
@@ -115,13 +111,13 @@ impl Communicator {
         let communicator = Arc::new(Self {
             name: "Communicator".to_string(),
             config: config.clone(),
-            main_thread:Arc::new(None.into()),
+            main_thread: Arc::new(None.into()),
             status: Mutex::new(Status::Stopped),
 
             intercom: InterCom::new(config, messages_recv).await,
             messages_send,
             users: vec![].into(),
-            workers: ReservedConnections::new()
+            workers: ReservedConnections::new(),
         });
         communicator.intercom.set_communicator(&communicator).await;
 
@@ -136,7 +132,9 @@ impl Communicator {
     pub async fn impl_start(self: Arc<Self>, restart: bool) -> Result<(), MCManageError> {
         self.check_allowed_start(restart).await?;
 
-        if !restart { info!(self.name, "Starting..."); }
+        if !restart {
+            info!(self.name, "Starting...");
+        }
         let start_time = Instant::now();
 
         if !restart {
@@ -147,7 +145,13 @@ impl Communicator {
         self.recv_start_result(rx, restart).await;
         *self.status.lock().await = Status::Started;
 
-        if !restart { info!(self.name, "Started in {:.3} secs!", start_time.elapsed().as_secs_f64()); }
+        if !restart {
+            info!(
+                self.name,
+                "Started in {:.3} secs!",
+                start_time.elapsed().as_secs_f64()
+            );
+        }
         Ok(())
     }
     /// This is the blocking implementation to stop a given struct. \
@@ -157,10 +161,16 @@ impl Communicator {
     /// this method to be executed during a restart. \
     /// \
     /// The `forced` parameter is used to wait for a given struct to start / stop to ensure a stop attempt.
-    pub async fn impl_stop(self: Arc<Self>, restart: bool, forced: bool) -> Result<(), MCManageError> {
+    pub async fn impl_stop(
+        self: Arc<Self>,
+        restart: bool,
+        forced: bool,
+    ) -> Result<(), MCManageError> {
         self.check_allowed_stop(restart, forced).await?;
 
-        if !restart { info!(self.name, "Shutting down..."); }
+        if !restart {
+            info!(self.name, "Shutting down...");
+        }
         let stop_time = Instant::now();
 
         if restart {
@@ -173,24 +183,40 @@ impl Communicator {
         *self.users.lock().await = vec![];
         *self.status.lock().await = Status::Stopped;
 
-        if !restart { info!(self.name, "Stopped in {:.3} secs!", stop_time.elapsed().as_secs_f64()); }
+        if !restart {
+            info!(
+                self.name,
+                "Stopped in {:.3} secs!",
+                stop_time.elapsed().as_secs_f64()
+            );
+        }
         Ok(())
     }
     /// Reset a given struct to its starting values.
     async fn reset(self: &Arc<Self>) {
-        if let Some(thread) = self.main_thread.lock().await.take() {thread.abort();}
+        if let Some(thread) = self.main_thread.lock().await.take() {
+            thread.abort();
+        }
         *self.status.lock().await = Status::Stopped;
         *self.users.lock().await = vec![];
     }
     /// This represents the main loop of a given struct.
-    async fn main(self: Arc<Self>, mut bootup_result: Option<oneshot::Sender<()>>) -> Result<(), MCManageError> {
+    async fn main(
+        self: Arc<Self>,
+        mut bootup_result: Option<oneshot::Sender<()>>,
+    ) -> Result<(), MCManageError> {
         let mut handlers = vec![];
 
         let mut tries = 0;
         loop {
             tries += 1;
 
-            match TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), Config::communicator_port(&self.config).await)).await {
+            match TcpListener::bind(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+                Config::communicator_port(&self.config).await,
+            ))
+            .await
+            {
                 Ok(tcplistener) => {
                     self.send_start_result(&mut bootup_result).await;
 
@@ -215,10 +241,13 @@ impl Communicator {
                         error!(self.name, "The maximum number of tries has been reached. A reset will be performed.");
                         self.reset().await;
                         return Err(MCManageError::FatalError);
-                    }
-                    else {
+                    } else {
                         error!(self.name, "Received an error when trying to bind the socket server. Error: {erro}");
-                        error!(self.name, "This was try {tries} of of {}. 3 seconds till the next one.", max_tries);
+                        error!(
+                            self.name,
+                            "This was try {tries} of of {}. 3 seconds till the next one.",
+                            max_tries
+                        );
                         sleep(Duration::new(3, 0)).await;
                     }
                 }
@@ -226,7 +255,10 @@ impl Communicator {
         }
     }
     /// Get the [`ClientType`] of a given client.
-    async fn get_client_type(self: &Arc<Self>, client_id: u64) -> Result<ClientType, MCManageError> {
+    async fn get_client_type(
+        self: &Arc<Self>,
+        client_id: u64,
+    ) -> Result<ClientType, MCManageError> {
         if client_id as usize > self.users.lock().await.len() {
             return Err(MCManageError::NotFound);
         }
@@ -241,10 +273,20 @@ impl Communicator {
     /// This method does two things.
     ///     1. calls the [`get_client_type`](Communicator::get_client_type) method to get the client's type.
     ///     2. gets an id for the client
-    /// 
+    ///
     /// If the client acts invalidly, the connection will be closed and the [`handler`](Communicator::handler) will abort.
-    async fn register_client(self: &Arc<Self>, client: &mut TcpStream, client_addr: &SocketAddr) -> Result<(u64, ClientType), MCManageError> {
-        let message: Vec<u8> = Message::new(Command::GetType(GetTypeArgs{client_type:None}), MessageType::Request, 0, 0).try_into()?;
+    async fn register_client(
+        self: &Arc<Self>,
+        client: &mut TcpStream,
+        client_addr: &SocketAddr,
+    ) -> Result<(u64, ClientType), MCManageError> {
+        let message: Vec<u8> = Message::new(
+            Command::GetType(GetTypeArgs { client_type: None }),
+            MessageType::Request,
+            0,
+            0,
+        )
+        .try_into()?;
         client.write_all(message.as_slice()).await?;
 
         let message;
@@ -265,7 +307,7 @@ impl Communicator {
                 }
                 Err(erro) => {
                     error!(self.name, "Encountered an error while receiving a message from {client_addr}. This connection will be closed. Error: {erro}");
-                    return Err(MCManageError::CriticalError)
+                    return Err(MCManageError::CriticalError);
                 }
             }
         }
@@ -284,27 +326,39 @@ impl Communicator {
                         id_set = true;
                         break;
                     }
-                    id+=1;
+                    id += 1;
                 }
                 if !id_set {
                     clients.push(Some((id, ClientType::User)));
                 }
 
-                let message: Vec<u8> = Message::new(Command::SetId(SetIdArgs{id}), MessageType::Request, 0, 0).try_into()?;
+                let message: Vec<u8> =
+                    Message::new(Command::SetId(SetIdArgs { id }), MessageType::Request, 0, 0)
+                        .try_into()?;
                 client.write_all(message.as_slice()).await?;
 
                 return Ok((id, ClientType::User));
             }
         }
 
-        error!(self.name, "The client did not react as expected. This connection will be closed.");
+        error!(
+            self.name,
+            "The client did not react as expected. This connection will be closed."
+        );
         Err(MCManageError::InvalidClient)
     }
     /// This method represents a handler, and it starts two asynchronous tasks that both run in parallel to handle different tasks of a handler:
     ///     1. The first method [`handle_client_send`](Communicator::handle_client_send) sends messages to the client.
     ///     2. The second method [`handle_client_recv`](Communicator::handle_client_recv) executes messages received by the client.
-    async fn handler(self: Arc<Self>, mut client: TcpStream, client_addr: SocketAddr) -> Result<(), MCManageError> {
-        info!(self.name, "A new client has connected using the IP address `{}`.", client_addr);
+    async fn handler(
+        self: Arc<Self>,
+        mut client: TcpStream,
+        client_addr: SocketAddr,
+    ) -> Result<(), MCManageError> {
+        info!(
+            self.name,
+            "A new client has connected using the IP address `{}`.", client_addr
+        );
 
         let (client_id, client_type) = self.register_client(&mut client, &client_addr).await?;
         let (intercom_send, intercom_recv) = self.intercom.add_handler(client_id).await?;
@@ -312,8 +366,10 @@ impl Communicator {
         let (client_read, mut client_write) = client.split();
 
         let handle_result = try_join!(
-            self.clone().handle_client_send(&mut client_write, intercom_recv),
-            self.clone().handle_client_recv(&client_read, intercom_send, client_addr, client_type)
+            self.clone()
+                .handle_client_send(&mut client_write, intercom_recv),
+            self.clone()
+                .handle_client_recv(&client_read, intercom_send, client_addr, client_type)
         );
         client_write.shutdown().await?;
 
@@ -343,18 +399,29 @@ impl Communicator {
         Ok(())
     }
     /// This method is responsible for sending messages to the client.
-    async fn handle_client_send<'a>(self: Arc<Self>, client: &mut WriteHalf<'a>, mut intercom_recv: Receiver<Message>) -> Result<(), MCManageError> {
+    async fn handle_client_send<'a>(
+        self: Arc<Self>,
+        client: &mut WriteHalf<'a>,
+        mut intercom_recv: Receiver<Message>,
+    ) -> Result<(), MCManageError> {
         loop {
             if let Some(message) = intercom_recv.recv().await {
                 let message: Vec<u8> = message.try_into()?;
                 client.write_all(message.as_slice()).await?;
-            } else { // Covers only TryRecvError::Disconnect
+            } else {
+                // Covers only TryRecvError::Disconnect
                 panic!("The sender channel should be available since it is held by the same struct as the receiver channel.");
             }
         }
     }
     /// This method is responsible executing messages received by the client.
-    async fn handle_client_recv<'a>(self: Arc<Self>, client: &ReadHalf<'a>, intercom_send: Sender<Message>, client_addr: SocketAddr, client_type: ClientType) -> Result<(), MCManageError> {
+    async fn handle_client_recv<'a>(
+        self: Arc<Self>,
+        client: &ReadHalf<'a>,
+        intercom_send: Sender<Message>,
+        client_addr: SocketAddr,
+        client_type: ClientType,
+    ) -> Result<(), MCManageError> {
         loop {
             let mut buffer: Vec<u8> = vec![0; Config::buffsize(&self.config).await];
             loop {
@@ -370,7 +437,10 @@ impl Communicator {
                         if 0 == message.receiver() {
                             message.execute(&client_type, &self).await;
                         } else if (intercom_send.send(message).await).is_err() {
-                            error!(self.name, "The InterCom disconnected. The Communicator will restart.");
+                            error!(
+                                self.name,
+                                "The InterCom disconnected. The Communicator will restart."
+                            );
                             self.restart();
                             return Err(MCManageError::CriticalError);
                         }
@@ -380,7 +450,7 @@ impl Communicator {
                     }
                     Err(erro) => {
                         error!(self.name, "Encountered an error while receiving a message from {client_addr}. This connection will be closed. Error: {erro}");
-                        return Err(MCManageError::ClientError)
+                        return Err(MCManageError::ClientError);
                     }
                 }
             }

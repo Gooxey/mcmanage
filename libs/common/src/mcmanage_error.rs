@@ -1,28 +1,18 @@
 //! This module provides the MCManageError which is used anywhere in the [`MCManage network`](https://github.com/Gooxey/MCManage.git).
 
-
 use std::{
     io,
-    str::Utf8Error
+    str::Utf8Error,
 };
-use thiserror::Error;
 
+use thiserror::Error;
 
 /// This error type provides errors used anywhere in the [`MCManage network`](https://github.com/Gooxey/MCManage.git).
 #[derive(Error, Debug)]
 pub enum MCManageError {
-    /// The function encountered a recoverable error.
-    #[error("The function encountered a recoverable error.")]
-    CriticalError,
-    /// The function encountered a non-recoverable error.
-    #[error("The function encountered a non-recoverable error.")]
-    FatalError,
     /// The function encountered an invalid file. See the function description for more information.
     #[error("The function encountered an invalid file. See the function description for more information.")]
     InvalidFile,
-    /// The client did not react as expected. This connection will be closed.
-    #[error("The client did not react as expected. This connection will be closed.")]
-    InvalidClient,
     /// The requested item could not be found.
     #[error("The requested item could not be found.")]
     NotFound,
@@ -38,12 +28,6 @@ pub enum MCManageError {
     /// The struct needs to be started before executing anything. Please execute the start function first.
     #[error("The struct needs to be started before executing anything. Please execute the start function first.")]
     NotStarted,
-    /// The client encountered an error. The connection will be closed.
-    #[error("The client encountered an error. The connection will be closed.")]
-    ClientError,
-    /// The client lacks the permission to execute a given command.
-    #[error("The client lacks the permission to execute a given command.")]
-    MissingPermission,
     /// An error of kind IOError occurred.
     #[error(transparent)]
     IOError(#[from] io::Error),
@@ -58,5 +42,5 @@ pub enum MCManageError {
     TomlSerializeError(#[from] toml::ser::Error),
     /// An error of kind SerdeJsonError occurred.
     #[error(transparent)]
-    SerdeJsonError(#[from] serde_json::Error)
+    SerdeJsonError(#[from] serde_json::Error),
 }

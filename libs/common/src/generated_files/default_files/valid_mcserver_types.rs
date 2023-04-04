@@ -1,9 +1,7 @@
-//! This module provides the [`MCSERVER_TYPES_DEFAULT constant`](MCSERVER_TYPES_DEFAULT), which represents the default text in the `config/mcserver_types.toml` file.
+//! This module provides the [`VALID_MCSERVER_TYPES`] constant.
 
-
-/// This constant represents the default text in the `config/mcserver_types.toml` file.
-pub const MCSERVER_TYPES_DEFAULT: &str =
-r#"# Restart the application to apply the changes made to the 'config/mcserver_types.toml' file.
+/// This constant represents the `valid file` content of the [`MCSERVER_TYPES_FILE`](crate::crate::generated_files::paths::MCSERVER_TYPES_FILE) file.
+pub const VALID_MCSERVER_TYPES: &str = r#"# Restart the application to apply the changes made to the 'config/mcserver_types.toml' file.
 
 # This file describes all mcserver_types that can be used in the 'config/server_list.toml' file.
 # They are very important for the application because it registers all events of a Minecraft server via the console.

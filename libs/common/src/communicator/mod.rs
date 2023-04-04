@@ -1,16 +1,12 @@
 //! This module provides the [`CommunicatorTrait`] which allows [`Messages`](message::Message) to send a command to any Communicator given.
 
-
 use std::sync::Arc;
 
 use async_trait::async_trait;
 
 use self::message::Message;
 
-
 pub mod message;
-pub mod client_type;
-
 
 /// This trait allows [`Messages`](message::Message) to send a command to any Communicator given.
 #[async_trait]

@@ -1,16 +1,14 @@
 //! This module provides the implementation of the [`macro@ConcurrentClass`](super::ConcurrentClass) macro.
 
-
 use proc_macro::{
+    self,
     TokenStream,
-    self
 };
 use quote::quote;
 use syn::{
+    parse_macro_input,
     DeriveInput,
-    parse_macro_input
 };
-
 
 /// This function implements the [`macro@ConcurrentClass`](super::ConcurrentClass) macro.
 pub fn concurrent_class(input: TokenStream) -> TokenStream {
@@ -42,9 +40,6 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                             break;
                         }
                         Err(erro) => {
-                            if let MCManageError::FatalError = erro {
-                                break;
-                            }
                             tokio::time::sleep(Config::cooldown(&self.config).await).await;
                         }
                     }

@@ -1,28 +1,21 @@
 //! This module provides the [`Message`] struct, which is used all over the [`MCManage network`](https://github.com/Gooxey/MCManage.git) to transmit commands or information.
 
-
 use std::sync::Arc;
 
 use proc_macros::add_convert;
 
-use crate::mcmanage_error::MCManageError;
-
 use self::{
     command::{
+        error::ErrorArgs,
         Command,
-        error::ErrorArgs
     },
-    message_type::MessageType
+    message_type::MessageType,
 };
-
-use super::{
-    client_type::ClientType,
-    CommunicatorTrait
-};
+use super::CommunicatorTrait;
+use crate::mcmanage_error::MCManageError;
 
 pub mod command;
 pub mod message_type;
-
 
 /// This struct represents the standard message, which is used to send commands or information between different applications in the
 /// [`MCManage network`](https://github.com/Gooxey/MCManage.git).
@@ -44,25 +37,30 @@ impl Message {
             command,
             message_type,
             receiver,
-            sender
+            sender,
         }
     }
     /// Execute the [`Command`] contained inside this [`Message`]. \
     /// This method will not block the thread calling it. \
     /// If the client lacks the permission to execute a given command, this method will return an error of kind [`MCManageError::MissingPermission`].
-    pub async fn execute<C: CommunicatorTrait>(&self, client_type: &ClientType, communicator: &Arc<C>) {
+    pub async fn execute<C: CommunicatorTrait>(
+        &self,
+        communicator: &Arc<C>,
+    ) {
         if let MessageType::Request = self.message_type {
-            if let Err(erro) = self.command.execute(client_type) {
+            if let Err(erro) = self.command.execute() {
                 match erro {
                     MCManageError::MissingPermission => {
-                        communicator.send_message(
-                            Message::new(
-                                Command::Error(ErrorArgs{error: "MissingPermission".to_string()}),
+                        communicator
+                            .send_message(Message::new(
+                                Command::Error(ErrorArgs {
+                                    error: "MissingPermission".to_string(),
+                                }),
                                 MessageType::Error,
                                 self.sender,
-                                0
-                            )
-                        ).await;
+                                0,
+                            ))
+                            .await;
                     }
                     _ => {
                         unimplemented!("All expected errors have been handled.")

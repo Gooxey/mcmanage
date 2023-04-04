@@ -8,9 +8,19 @@ This project is still in very early development.
 
 ## Features
 
-- Starts Minecraft servers configured in the `config/server_list.toml` file ( The Minecraft server must be stored under `servers/<the name of the server>` )
-- Restarts all Minecraft servers every 24h
-- Stores the logs of each server under `logs/<the name of the server>.txt`
+### Minecraft server
+
+- Starts Minecraft servers configured in the `config/server_list.toml` file. ( The Minecraft server must be stored under `servers/<the name of the server>` )
+- Restarts a Minecraft server regularly if configured in the `config/server_list.toml` file.
+- Stores the logs of each server under `logs/servers/<the name of the server>.log`
+- Automatically agrees to the EULA if configured in the `config/config.toml` file.
+- Downloads the server jar if needed from a link specified in the `config/server_list.toml` file.
+- Shuts down the computer running this application after some time of no player activity on any Minecraft server, if configured in the `config/server_list.toml` file.
+
+### UI
+
+- Hosts an UI to the port specified in the `config/config.toml` file. (The UI's files can be found at `share/frontend`)
+- Using the REST API of this application, one can replace the official UI with a custom one.
 
 ## Configuration
 
@@ -37,6 +47,8 @@ After that, there is just one command missing:
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
+
+Note that you might have to install Java to start the Minecraft servers.
 
 ## Install
 

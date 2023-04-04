@@ -1,16 +1,15 @@
 //! This module provides the [`MessageType`] enum, which is used to determine what kind of [`Message`](super::Message) was sent.
 
-
 use proc_macros::add_convert;
-use crate::mcmanage_error::MCManageError;
 
+use crate::mcmanage_error::MCManageError;
 
 /// This enum describes the type of message holding this enum. There are three possible states. The first one is [`request`](MessageType::Request). It is used when the
 /// [`Message`](super::Message) was sent to receive or execute something. The second option, [`response`](MessageType::Response), is used when the [`Message`](super::Message)
 /// returns the requested data or the result of an operation. The last variant gets used in case an error occurs while executing a command.
-/// 
+///
 /// ## Variants
-/// 
+///
 /// | Variant                             | Description                                                                                                         |
 /// |-------------------------------------|---------------------------------------------------------------------------------------------------------------------|
 /// | [`Request`](MessageType::Request)   | The [`Message`](super::Message) sent requests an operation to be executed or a value to be returned.                |
@@ -23,5 +22,5 @@ pub enum MessageType {
     /// The [`Message`](super::Message) sent requests an operation to be executed or a value to be returned.
     Request,
     /// The [`Message`](super::Message) sent returns the result of an operation or the value requested.
-    Response
+    Response,
 }

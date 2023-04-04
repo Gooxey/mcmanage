@@ -1,20 +1,15 @@
 #![cfg(test)]
 
-
-use common::{
-    communicator::message::{
-        command::{
-            Command,
-            set_id::SetIdArgs
-        },
-        message_type::MessageType
-    }
+use common::communicator::message::{
+    command::{
+        set_id::SetIdArgs,
+        Command,
+    },
+    message_type::MessageType,
 };
 
-use crate::test_functions::*;
-
 use super::*;
-
+use crate::test_functions::*;
 
 async fn new_intercom() -> (Arc<InterCom>, Sender<Message>) {
     setup_logger();
@@ -22,11 +17,12 @@ async fn new_intercom() -> (Arc<InterCom>, Sender<Message>) {
     let (send_message, rx) = channel(Config::buffsize(&config).await);
     let intercom = InterCom::new(&config, rx).await;
 
-    intercom.set_communicator(&Communicator::new(&config).await).await;
+    intercom
+        .set_communicator(&Communicator::new(&config).await)
+        .await;
 
     (intercom, send_message)
 }
-
 
 #[tokio::test]
 async fn add_single_handler() {
@@ -193,7 +189,12 @@ async fn communicator_to_handler() {
     intercom.clone().impl_start(false).await.unwrap();
     let (_handler_send, mut handler_recv) = intercom.add_handler(3).await.unwrap();
 
-    let message = Message::new(Command::SetId(SetIdArgs{id:0}), MessageType::Request, 3, 0); // The command here does not matter
+    let message = Message::new(
+        Command::SetId(SetIdArgs { id: 0 }),
+        MessageType::Request,
+        3,
+        0,
+    ); // The command here does not matter
     send_message.send(message.clone()).await.unwrap();
     assert_eq!(message, handler_recv.recv().await.unwrap());
 
@@ -207,10 +208,14 @@ async fn handler_to_handler() {
     let (handler_send, _handler_recv) = intercom.add_handler(3).await.unwrap();
     let (_handler2_send, mut handler2_recv) = intercom.add_handler(5).await.unwrap();
 
-    let message = Message::new(Command::SetId(SetIdArgs{id:0}), MessageType::Request, 5, 0); // The command here does not matter
+    let message = Message::new(
+        Command::SetId(SetIdArgs { id: 0 }),
+        MessageType::Request,
+        5,
+        0,
+    ); // The command here does not matter
     handler_send.send(message.clone()).await.unwrap();
     assert_eq!(message, handler2_recv.recv().await.unwrap());
-
 
     intercom.impl_stop(false, true).await.unwrap();
     cleanup();

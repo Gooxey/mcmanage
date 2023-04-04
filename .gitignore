@@ -1,16 +1,17 @@
 dist/
 target/
 /archive.rs
+*_old.rs
 
+/testing_files
 
 /config/
 /logs/
 /servers/
-/test_files/
-/website/
+/share/
 
-/libs/common/config/
-/libs/common/logs/
-/libs/common/servers/
-/libs/common/test_files/
-/libs/common/website/
+
+# The Communicator and everything related to it remains unused until the Runner gets implemented
+/src/communicator/
+/libs/proc_macros/src/match_command.rs
+/libs/common/src/communicator/

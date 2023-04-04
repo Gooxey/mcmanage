@@ -1,15 +1,15 @@
 #![cfg(test)]
 
-
 use super::*;
-use crate::test_functions::*;
-
+use crate::test_functions::{
+    self,
+    cleanup,
+};
 
 async fn start_test() -> MCServerType {
-    cleanup();
+    test_functions::start_test();
     MCServerType::new(&Config::new().await, "purpur", "MyMCServer")
 }
-
 
 #[tokio::test]
 async fn new() {
@@ -26,7 +26,10 @@ async fn new() {
 async fn get_started() {
     let my_mcserver_type = start_test().await;
 
-    assert_eq!(my_mcserver_type.get_started().await, [" INFO]: Done (", ")! For help, type \"help\""]);
+    assert_eq!(
+        my_mcserver_type.get_started().await,
+        [" INFO]: Done (", ")! For help, type \"help\""]
+    );
 
     cleanup();
 }
@@ -34,7 +37,10 @@ async fn get_started() {
 async fn get_player_joined() {
     let my_mcserver_type = start_test().await;
 
-    assert_eq!(my_mcserver_type.get_player_joined().await[0], " joined the game");
+    assert_eq!(
+        my_mcserver_type.get_player_joined().await[0],
+        " joined the game"
+    );
 
     cleanup();
 }
@@ -51,7 +57,10 @@ async fn get_player_left() {
 async fn get_player_name_joined() {
     let my_mcserver_type = start_test().await;
 
-    let name = my_mcserver_type.get_player_name_joined("[13:53:51 INFO]: Gooxey joined the game").await.unwrap();
+    let name = my_mcserver_type
+        .get_player_name_joined("[13:53:51 INFO]: Gooxey joined the game")
+        .await
+        .unwrap();
 
     assert_eq!(name, "Gooxey");
 
@@ -61,7 +70,10 @@ async fn get_player_name_joined() {
 async fn get_player_name_left() {
     let my_mcserver_type = start_test().await;
 
-    let name = my_mcserver_type.get_player_name_left("[13:53:51 INFO]: Gooxey left the game").await.unwrap();
+    let name = my_mcserver_type
+        .get_player_name_left("[13:53:51 INFO]: Gooxey left the game")
+        .await
+        .unwrap();
 
     assert_eq!(name, "Gooxey");
 

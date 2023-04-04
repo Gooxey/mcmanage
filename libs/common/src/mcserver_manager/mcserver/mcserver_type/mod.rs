@@ -1,39 +1,37 @@
 //! This module provides the [`MCServerType struct`](MCServerType), which is used to read the `config/mcserver_types.toml` file and provide the [`MCServer`](super::MCServer) with strings
 //! corresponding to different situations, like a player joining or leaving.
 
-
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use tokio::{
     sync::Mutex,
-    time::sleep
+    time::sleep,
 };
 use toml::Value;
 
 use crate::{
+    config::Config,
     error,
-    mcmanage_error::MCManageError,
-    qol::load_toml_file::{
-        load_toml_replace,
-        replace_with_valid_file
+    generated_files::{
+        load_toml_file::{
+            load_toml_replace,
+            replace_with_valid_file,
+        },
+        paths::MCSERVER_TYPES_FILE,
     },
+    mcmanage_error::MCManageError,
     warn,
-    config::Config
 };
-use self::mcserver_types_default::MCSERVER_TYPES_DEFAULT;
-
 
 mod tests;
-pub mod mcserver_types_default;
-
 
 /// With this struct, the [`MCServer`](super::MCServer) is able to interpret messages sent by a Minecraft server. \
-/// To be exact, this struct is responsible for reading the `config/mcserver_types.toml` file and providing the [`MCServer`](super::MCServer) with strings corresponding to 
+/// To be exact, this struct is responsible for reading the `config/mcserver_types.toml` file and providing the [`MCServer`](super::MCServer) with strings corresponding to
 /// different situations, like a player joining or leaving.
-/// 
+///
 /// # Methods
-/// 
+///
 /// | Method                                                                               | Description                                                  |
 /// |--------------------------------------------------------------------------------------|--------------------------------------------------------------|
 /// | [`new(...) -> Self`](MCServerType::new)                                              | Create a new [`MCServerType`](MCServerType).                 |
@@ -50,22 +48,22 @@ pub struct MCServerType {
     /// The type of the [`MCServer`](super::MCServer) holding this struct
     server_type: String,
     /// The name of the [`MCServer`](super::MCServer) holding this struct
-    parent: String
+    parent: String,
 }
 impl MCServerType {
     /// Create a new [`MCServerType`].
-    /// 
+    ///
     /// # Parameters
-    /// 
-    /// | Parameter           | Description                                                                                                                                                                                      |
-    /// |---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-    /// | `server_type: &str` | To see all available options see the `config/mcserver_types.toml` file. To see the standard options see the [`MCSERVER_TYPES_DEFAULT constant`](mcserver_types_default::MCSERVER_TYPES_DEFAULT). |
-    /// | `parent: &str`      | The name of the [`MCServer`](super::MCServer) this [`MCServerType`] was meant for.                                                                                                               |
+    ///
+    /// | Parameter           | Description                                                                        |
+    /// |---------------------|------------------------------------------------------------------------------------|
+    /// | `server_type: &str` | To see all available options see the `config/mcserver_types.toml` file.            |
+    /// | `parent: &str`      | The name of the [`MCServer`](super::MCServer) this [`MCServerType`] was meant for. |
     pub fn new(config: &Arc<Mutex<Config>>, server_type: &str, parent: &str) -> Self {
         Self {
             config: config.clone(),
             server_type: server_type.to_string(),
-            parent: parent.to_string()
+            parent: parent.to_string(),
         }
     }
 
@@ -76,35 +74,36 @@ impl MCServerType {
     /// [`get_message_vector method`](Self::get_message_vector).
     #[async_recursion]
     async fn get_message(&self, identifier: &str) -> Value {
-        let mcserver_type_toml = load_toml_replace(
-            "config",
-            "mcserver_types",
-            MCSERVER_TYPES_DEFAULT,
-            &self.parent,
-            true
-        ).await;
+        let mcserver_type_toml = load_toml_replace(&MCSERVER_TYPES_FILE, &self.parent, true).await;
 
         // get the toml of a provided server type
         if let Some(server) = mcserver_type_toml.get(&self.server_type) {
             if let Some(message) = server.get(identifier) {
                 message.to_owned()
             } else {
-                replace_with_valid_file("config", "mcserver_types", MCSERVER_TYPES_DEFAULT).await;
+                replace_with_valid_file(&MCSERVER_TYPES_FILE).await;
                 self.get_message(identifier).await
             }
         } else {
-            error!(self.parent, "Could not find the mcserver_type {} in the config/mcserver_types.toml file.", self.server_type);
-            error!(self.parent, "This MCServer will now be blocked until the mcserver_type {} got added.", self.server_type);
-            error!(self.parent, "In case you change the mcserver_type for {}, restart this application.", self.parent);
+            error!(
+                self.parent,
+                "Could not find the mcserver_type {} in the config/mcserver_types.toml file.",
+                self.server_type
+            );
+            error!(
+                self.parent,
+                "This MCServer will now be blocked until the mcserver_type {} got added.",
+                self.server_type
+            );
+            error!(
+                self.parent,
+                "In case you change the mcserver_type for {}, restart this application.",
+                self.parent
+            );
 
             loop {
-                let mcserver_type_toml = load_toml_replace(
-                    "config",
-                    "mcserver_types",
-                    MCSERVER_TYPES_DEFAULT,
-                    &self.parent,
-                    true
-                ).await;
+                let mcserver_type_toml =
+                    load_toml_replace(&MCSERVER_TYPES_FILE, &self.parent, true).await;
 
                 if mcserver_type_toml.get(&self.server_type).is_some() {
                     return self.get_message(identifier).await;
@@ -124,20 +123,20 @@ impl MCServerType {
     #[async_recursion]
     async fn get_message_vector(&self, identifier: &str) -> Vec<String> {
         // convert the message got into a vector of strings and return it
-        if let Some (vec) = self.get_message(identifier).await.as_array() {
+        if let Some(vec) = self.get_message(identifier).await.as_array() {
             let mut final_vec: Vec<String> = vec![];
             for item in vec {
                 if let Some(string) = item.as_str() {
                     final_vec.push(string.to_string());
                 } else {
-                    replace_with_valid_file("config", "mcserver_types", MCSERVER_TYPES_DEFAULT).await;
+                    replace_with_valid_file(&MCSERVER_TYPES_FILE).await;
                     return self.get_message_vector(identifier).await;
                 }
             }
             final_vec
         } else {
             warn!(self.parent, "Could not find the parameter {identifier} in the config/mcserver_list.toml file. A valid file will be generated.");
-            replace_with_valid_file("config", "mcserver_types", MCSERVER_TYPES_DEFAULT).await;
+            replace_with_valid_file(&MCSERVER_TYPES_FILE).await;
             self.get_message_vector(identifier).await
         }
     }
@@ -159,15 +158,19 @@ impl MCServerType {
     #[async_recursion]
     pub async fn get_player_name_joined(&self, line: &str) -> Result<String, MCManageError> {
         let player_name_pos: u64;
-        if let Some(pos) = self.get_message("player_name_joined_pos").await.as_integer() {
+        if let Some(pos) = self
+            .get_message("player_name_joined_pos")
+            .await
+            .as_integer()
+        {
             if let Ok(pos) = pos.try_into() {
                 player_name_pos = pos;
             } else {
-                replace_with_valid_file("config", "mcserver_types", MCSERVER_TYPES_DEFAULT).await;
+                replace_with_valid_file(&MCSERVER_TYPES_FILE).await;
                 return self.get_player_name_joined(line).await;
             }
         } else {
-            replace_with_valid_file("config", "mcserver_types", MCSERVER_TYPES_DEFAULT).await;
+            replace_with_valid_file(&MCSERVER_TYPES_FILE).await;
             return self.get_player_name_joined(line).await;
         }
 
@@ -194,11 +197,11 @@ impl MCServerType {
             if let Ok(pos) = pos.try_into() {
                 player_name_pos = pos;
             } else {
-                replace_with_valid_file("config", "mcserver_types", MCSERVER_TYPES_DEFAULT).await;
+                replace_with_valid_file(&MCSERVER_TYPES_FILE).await;
                 return self.get_player_name_left(line).await;
             }
         } else {
-            replace_with_valid_file("config", "mcserver_types", MCSERVER_TYPES_DEFAULT).await;
+            replace_with_valid_file(&MCSERVER_TYPES_FILE).await;
             return self.get_player_name_left(line).await;
         }
 

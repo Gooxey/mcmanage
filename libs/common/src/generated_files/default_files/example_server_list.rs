@@ -1,9 +1,7 @@
-//! This module provides the [`SERVER_LIST_EXAMPLE_DEFAULT constant`](SERVER_LIST_EXAMPLE_DEFAULT), which represents the default text in the `servers/server_list_example.toml` file.
+//! This module provides the [`EXAMPLE_SERVER_LIST`] constant.
 
-
-/// This constant represents the default text in the `servers/server_list_example.toml` file.
-pub const SERVER_LIST_EXAMPLE_DEFAULT: &str =
-r#"# Restart the application to apply the changes made to the 'config/server_list.toml' file.
+/// This constant represents the `example file` content of the [`SERVER_LIST_FILE`](crate::crate::generated_files::paths::SERVER_LIST_FILE) file.
+pub const EXAMPLE_SERVER_LIST: &str = r#"# Restart the application to apply the changes made to the 'config/server_list.toml' file.
 
 # This represents one Minecraft server
 # The name in the brackets is also the name of the Minecraft server

@@ -1,55 +1,55 @@
 //! This module provides the [`MCServerManager`] struct, which is responsible for managing all [`MCServers`](MCServer). ( starting, stopping, ... )
 
-
 use std::{
     sync::Arc,
     time::{
         Duration,
-        Instant
-    }
+        Instant,
+    },
 };
 
 use proc_macros::ConcurrentClass;
 use tokio::{
     sync::{
+        oneshot,
         Mutex,
-        oneshot
     },
-    time::sleep
+    time::sleep,
 };
 use toml::Table;
 
+use self::{
+    mcserver::MCServer,
+    server_item::ServerItem,
+};
 use crate::{
     config::Config,
     error,
+    generated_files::{
+        load_toml_file::load_toml,
+        paths::SERVER_LIST_FILE,
+    },
     info,
     mcmanage_error::MCManageError,
-    qol::load_toml_file::load_toml,
     status::Status,
-    types::ThreadJoinHandle
-};
-use self::{
-    mcserver::MCServer,
-    server_list_example_default::SERVER_LIST_EXAMPLE_DEFAULT, server_item::ServerItem
+    types::ThreadJoinHandle,
 };
 
-
+pub mod mcserver;
 mod server_item;
 mod tests;
-pub mod mcserver;
-pub mod server_list_example_default;
-
 
 // FIXME When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.toml` file, the Minecraft server can fail to start. (only when starting them via the MCServerManager)
 // TODO constantly update MCServer list
-// FIXME: Register errors, like "java.net.BindException: Address already in use: bind" from the Minecraft server and print them to the console (do not crash the application -> instead, stop Minecraft server)
-// TODO: Make the server.properties file editable
+// FIXME Register errors, like "java.net.BindException: Address already in use: bind" from the Minecraft server and print them to the console (do not crash the application -> instead, stop Minecraft server)
+// TODO Make the server.properties file editable
+// TODO Make tests able to run concurrently
 
 /// This struct is responsible for managing all [`MCServers`](MCServer). ( starting, stopping, ... ) \
 /// In more detail, it creates [`MCServer`] structs accordingly to the `servers/server_list.toml` file. Additionally it will also start a thread which:
 ///     - If set, will shut down the computer that is running this application.
 ///     - If enabled, will restart Minecraft servers automatically.
-/// 
+///
 /// # Warning
 /// When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.toml` file, the Minecraft server can fail to start.
 #[derive(ConcurrentClass)]
@@ -66,7 +66,7 @@ pub struct MCServerManager {
     /// The list of every MCServer
     mcserver_list: Mutex<Vec<Arc<MCServer>>>,
     /// The list of every restart_time for every MCServer
-    restart_times: Mutex<Vec<Duration>>
+    restart_times: Mutex<Vec<Duration>>,
 }
 impl MCServerManager {
     /// Create a new [`MCServerManager`] instance.
@@ -78,7 +78,7 @@ impl MCServerManager {
             status: Status::Stopped.into(),
 
             mcserver_list: vec![].into(),
-            restart_times: vec![].into()
+            restart_times: vec![].into(),
         }
         .into()
     }
@@ -90,7 +90,9 @@ impl MCServerManager {
     pub async fn impl_start(self: Arc<Self>, restart: bool) -> Result<(), MCManageError> {
         self.check_allowed_start(restart).await?;
 
-        if !restart { info!(self.name, "Starting..."); }
+        if !restart {
+            info!(self.name, "Starting...");
+        }
         let start_time = Instant::now();
 
         self.load_mcserver_list().await;
@@ -104,7 +106,13 @@ impl MCServerManager {
             *self.status.lock().await = Status::Started;
         }
 
-        if !restart { info!(self.name, "Started in {:.3} secs!", start_time.elapsed().as_secs_f64()); }
+        if !restart {
+            info!(
+                self.name,
+                "Started in {:.3} secs!",
+                start_time.elapsed().as_secs_f64()
+            );
+        }
         Ok(())
     }
     /// This is the blocking implementation to stop a given struct. \
@@ -114,10 +122,16 @@ impl MCServerManager {
     /// this method to be executed during a restart. \
     /// \
     /// The `forced` parameter is used to wait for a given struct to start / stop to ensure a stop attempt.
-    pub async fn impl_stop(self: Arc<Self>, restart: bool, forced: bool) -> Result<(), MCManageError> {
+    pub async fn impl_stop(
+        self: Arc<Self>,
+        restart: bool,
+        forced: bool,
+    ) -> Result<(), MCManageError> {
         self.check_allowed_stop(restart, forced).await?;
 
-        if !restart { info!(self.name, "Shutting down..."); }
+        if !restart {
+            info!(self.name, "Shutting down...");
+        }
         let stop_time = Instant::now();
 
         for mcserver in &*self.mcserver_list.lock().await {
@@ -129,12 +143,20 @@ impl MCServerManager {
             *self.status.lock().await = Status::Stopped;
         }
 
-        if !restart { info!(self.name, "Stopped in {:.3} secs!", stop_time.elapsed().as_secs_f64()); }
+        if !restart {
+            info!(
+                self.name,
+                "Stopped in {:.3} secs!",
+                stop_time.elapsed().as_secs_f64()
+            );
+        }
         Ok(())
     }
     /// Reset a given struct to its starting values.
     pub async fn reset(self: &Arc<Self>) {
-        if let Some(thread) = self.main_thread.lock().await.take() {thread.abort();}
+        if let Some(thread) = self.main_thread.lock().await.take() {
+            thread.abort();
+        }
         *self.status.lock().await = Status::Stopped;
 
         for mcserver in &*self.mcserver_list.lock().await {
@@ -145,30 +167,25 @@ impl MCServerManager {
     /// Create the MCServers according to the `servers/server_list.toml` file. \
     /// If any problem is detected in the `servers/server_list.toml` file, this file will be renamed to `servers/invalid_server_list.toml` and an example file will be
     /// generated under `servers/server_list_example.toml`.
-    /// 
+    ///
     /// # Warning
     /// When specifying a ram limit like `-Xmx=4G` in the `servers/server_list.toml` file, the Minecraft server can fail to start.
     async fn load_mcserver_list(self: &Arc<Self>) {
         /// This function will read the 'config/server_list.toml' file and return a [`toml table`](Table) once the [`load_toml`] function returns one.
         async fn wait_for_valid_server_list(mcserver_manager: &Arc<MCServerManager>) -> Table {
-            if let Ok(mcserver_list_toml) = load_toml(
-                "config",
-                "server_list",
-                SERVER_LIST_EXAMPLE_DEFAULT,
-                &mcserver_manager.name,
-                true
-            ).await {
+            if let Ok(mcserver_list_toml) =
+                load_toml(&SERVER_LIST_FILE, &mcserver_manager.name, true).await
+            {
                 mcserver_list_toml
             } else {
-                error!(mcserver_manager.name, "The MCServerManager will now wait for a valid 'config/server_list.toml' file.");
+                error!(
+                    mcserver_manager.name,
+                    "The MCServerManager will now wait for a valid 'config/server_list.toml' file."
+                );
                 loop {
-                    if let Ok(mcserver_list_toml) = load_toml(
-                        "config",
-                        "server_list",
-                        SERVER_LIST_EXAMPLE_DEFAULT,
-                        &mcserver_manager.name,
-                        false
-                    ).await {
+                    if let Ok(mcserver_list_toml) =
+                        load_toml(&SERVER_LIST_FILE, &mcserver_manager.name, false).await
+                    {
                         info!(mcserver_manager.name, "A valid 'config/server_list.toml' has been registered. The starting process will now proceed.");
                         return mcserver_list_toml;
                     } else {
@@ -177,7 +194,6 @@ impl MCServerManager {
                 }
             }
         }
-
 
         let mut mcserver_list_toml = wait_for_valid_server_list(self).await;
 
@@ -229,14 +245,16 @@ impl MCServerManager {
                 return;
             }
         }
-
     }
     /// Return a list of every [`MCServer`].
     pub async fn get_all(self: &Arc<Self>) -> Result<Vec<Arc<MCServer>>, MCManageError> {
-        return Ok(self.mcserver_list.lock().await.clone())
+        return Ok(self.mcserver_list.lock().await.clone());
     }
     /// Search for a [`MCServer`] by its name and return it if found.
-    pub async fn get_mcserver(self: &Arc<Self>, mcserver_name: &str) -> Result<Arc<MCServer>, MCManageError> {
+    pub async fn get_mcserver(
+        self: &Arc<Self>,
+        mcserver_name: &str,
+    ) -> Result<Arc<MCServer>, MCManageError> {
         for mcserver in &*self.mcserver_list.lock().await {
             if mcserver.name() == mcserver_name {
                 return Ok(mcserver.clone());
@@ -246,7 +264,10 @@ impl MCServerManager {
         Err(MCManageError::NotFound)
     }
     /// This represents the main loop of a given struct.
-    async fn main(self: Arc<Self>, mut bootup_result: Option<oneshot::Sender<()>>) -> Result<(), MCManageError> {
+    async fn main(
+        self: Arc<Self>,
+        mut bootup_result: Option<oneshot::Sender<()>>,
+    ) -> Result<(), MCManageError> {
         self.send_start_result(&mut bootup_result).await;
 
         let mut offline_counter: Option<Instant> = None;
@@ -272,7 +293,11 @@ impl MCServerManager {
                 if let Some(offline_counter) = offline_counter {
                     let shutdown_time = Config::shutdown_time(&self.config).await;
                     if Instant::now() - offline_counter >= shutdown_time {
-                        info!(self.name, "No player was active for {:?}. This machine will now shut down.", shutdown_time);
+                        info!(
+                            self.name,
+                            "No player was active for {:?}. This machine will now shut down.",
+                            shutdown_time
+                        );
                         system_shutdown::shutdown().expect("Could not shutdown this machine.");
                     }
                 }
@@ -287,8 +312,15 @@ impl MCServerManager {
             // restart the MCServers automatically every configured amount of time
             let mcserver_list = self.mcserver_list.lock().await;
             for (i, restart_time) in self.restart_times.lock().await.iter().enumerate() {
-                if *restart_time > Duration::new(0, 0) && Instant::now() - last_restart[i] >= *restart_time {
-                    info!(self.name, "The automatic restart time of {:?} has been reached. {} will now restart.", restart_time, mcserver_list[i].name());
+                if *restart_time > Duration::new(0, 0)
+                    && Instant::now() - last_restart[i] >= *restart_time
+                {
+                    info!(
+                        self.name,
+                        "The automatic restart time of {:?} has been reached. {} will now restart.",
+                        restart_time,
+                        mcserver_list[i].name()
+                    );
                     mcserver_list[i].restart();
                     last_restart[i] = Instant::now();
                 }
