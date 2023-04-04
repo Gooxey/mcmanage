@@ -20,7 +20,7 @@ This project is still in very early development.
 ### UI
 
 - Hosts an UI to the port specified in the `config/config.toml` file. (The UI's files can be found at `share/frontend`)
-- Using the [REST API](https://github.com/Gooxey/MCManage.wiki.git) of this application, one can replace the official UI with a custom one.
+- Using the [REST API](https://github.com/Gooxey/MCManage/wiki) of this application, one can replace the official UI with a custom one.
 
 ## Configuration
 
