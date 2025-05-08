@@ -10,82 +10,42 @@ use std::sync::{
         AtomicBool,
         Ordering,
     },
-    Arc,
+    Arc, OnceLock,
 };
 
 use common::{
     config::Config,
     generated_files::paths::LOGS_DIR,
-    info,
     mcmanage_error::MCManageError,
-    mcserver_manager::MCServerManager,
+    server_manager::ServerManager,
 };
-use fern::colors::{
-    Color,
-    ColoredLevelConfig,
+use goolog::*;
+use lazy_static::lazy_static;
+use tokio::{
+    runtime::Handle,
+    spawn,
+    sync::Mutex,
 };
-use tokio::spawn;
 
 use crate::serve_frontend::{
-    load_website,
-    serve_website,
+    serve_frontend,
 };
 
 mod serve_frontend;
 
+
+lazy_static! {
+    /// The [`ServerManager`] of this application.
+    pub static ref SERVER_MANAGER: Arc<ServerManager> = {
+        let handle = Handle::current();
+        let _handle_lock = handle.enter();
+        futures::executor::block_on(ServerManager::init())
+    };
+}
+
 // TODO Save all files downloaded from the internet to the downloads folder; Save paths to files with their origin; on every use or start refresh this list in case any file got deleted
 // TODO Create trace logs
-
-/// This function will start the [`Logger`](fern::Dispatch) of this application
-fn setup_logger() -> Result<(), fern::InitError> {
-    std::fs::create_dir_all(LOGS_DIR.as_path()).unwrap_or_else(|erro| {
-        panic!(
-            "An error occurred while creating the directory '{}'. Error: {erro}",
-            LOGS_DIR.display()
-        )
-    });
-
-    let colors = ColoredLevelConfig::new()
-        .debug(Color::Blue)
-        .error(Color::Red)
-        .info(Color::Green)
-        .trace(Color::White)
-        .warn(Color::Yellow);
-
-    fern::Dispatch::new()
-        .chain(
-            fern::Dispatch::new()
-                .format(move |out, message, record| {
-                    out.finish(format_args!(
-                        "{} | {:16.16} | {:5} | {}",
-                        chrono::Local::now().format("%d.%m.%Y | %H:%M:%S"),
-                        record.target(),
-                        record.level(),
-                        message
-                    ))
-                })
-                .level(log::LevelFilter::Info)
-                .chain(fern::log_file(LOGS_DIR.join("mcmanage.log"))?),
-        )
-        .chain(
-            fern::Dispatch::new()
-                .format(move |out, message, record| {
-                    out.finish(format_args!(
-                        "{} | {:16.16} | {:5} | {}",
-                        chrono::Local::now().format(
-                            "\x1b[2m\x1b[1m%d.%m.%Y\x1b[0m | \x1b[2m\x1b[1m%H:%M:%S\x1b[0m"
-                        ),
-                        record.target(),
-                        colors.color(record.level()),
-                        message
-                    ))
-                })
-                .level(log::LevelFilter::Info)
-                .chain(std::io::stdout()),
-        )
-        .apply()?;
-    Ok(())
-}
+// TODO Add a force shutdown on second Ctrl+C
 
 /// This function will setup all handlers for exiting the application. \
 /// In particular, it will set handlers for:
@@ -110,19 +70,12 @@ fn setup_exit_handlers(alive: Arc<AtomicBool>) {
 async fn main() {
     let alive = Arc::new(AtomicBool::new(true));
     setup_exit_handlers(alive.clone());
-    setup_logger().unwrap_or_else(|erro| panic!("Failed to setup the logger. Error: {erro}"));
+    init_logger(None, None, Some(LOGS_DIR.join("mcmanage.log")));
+    Config::init().await;
 
-    info!("Main", "Starting...");
+    spawn(serve_frontend());
 
-    info!("Main", "Exporting the website...");
-    load_website();
-
-    let config = Config::new().await;
-    let mcserver_manager = MCServerManager::new(&config).await;
-
-    spawn(serve_website(config.clone()));
-
-    mcserver_manager.start();
+    SERVER_MANAGER.start();
 
     while alive.load(Ordering::SeqCst) {}
     info!(
@@ -130,7 +83,7 @@ async fn main() {
         "A Ctrl+C got registered. This application will now shut down..."
     );
 
-    if let Err(MCManageError::NotReady) = mcserver_manager.clone().impl_stop(false, false).await {
-        mcserver_manager.reset().await;
+    if let Err(MCManageError::NotReady) = SERVER_MANAGER.clone().impl_stop(false, false).await {
+        SERVER_MANAGER.reset().await;
     }
 }

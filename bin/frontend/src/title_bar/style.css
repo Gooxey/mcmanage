@@ -1,0 +1,48 @@
+titlebar {
+    display: flex;
+
+    position: fixed;
+
+    height: 56px;
+    width: calc(100% - 20px);
+
+    padding: 10px;
+
+    box-shadow: 0 0 10px 10px var(--grey900);
+}
+placeholder {
+    height: 92px;
+}
+left_container {
+    display: flex;
+
+    align-items: center;
+}
+logo {
+    height: 48px;
+    width: 48px;
+
+    margin-right: 8px;
+}
+title {
+    text-align: center;
+    font-weight: 500;
+    font-size: 32px;
+}
+
+middle_container {
+    display: flex;
+
+    align-items: center;
+
+    margin-left: 16px;
+    flex-grow: 1;
+}
+
+right_container {
+    display: flex;
+    align-items: center;
+}
+user_icon {
+    height: 56px;
+}

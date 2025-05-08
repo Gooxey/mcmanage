@@ -1,0 +1,76 @@
+{
+    "New Yew function component": {
+        "prefix": "yewfc",
+        "body": [
+            "#[derive(PartialEq, Properties)]",
+            "pub struct ${1:ComponentName}Props {}",
+            "",
+            "#[function_component]",
+            "pub fn $1(props: &${1}Props) -> Html {",
+            "    html! {",
+            "        <>",
+            "            $0",
+            "        </>",
+            "    }",
+            "}"
+        ],
+        "description": "Create a minimal Yew function component"
+    },
+    "New Yew struct component": {
+        "prefix": "yewsc",
+        "body": [
+            "pub struct ${1:ComponentName};",
+            "",
+            "#[derive(Properties, PartialEq)]",
+            "pub struct ${1}Props {",
+            "}",
+            "",
+            "pub enum ${1}Msg {",
+            "}",
+            "",
+            "impl Component for ${1} {",
+            "    type Message = ${1}Msg;",
+            "    type Properties = ${1}Props;",
+            "",
+            "    fn create(ctx: &Context<Self>) -> Self {",
+            "        Self",
+            "    }",
+            "",
+            "   fn update(&mut self, ctx: &Context<Self>, message: Self::Message) -> bool {",
+            "       false",
+            "   }",
+            "",
+            "    fn view(&self, ctx: &Context<Self>) -> Html {",
+            "        html! {",
+            "            $0",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "description": "Create a new Yew component with a message enum"
+    },
+    "New Yew Style": {
+        "prefix": "yewstyle",
+        "body": [
+            "pub fn ${1:StyleName}() -> StyleSource {",
+            "    css!(\"",
+            "        ",
+            "    \")",
+            "}"
+        ],
+        "description": "Create a new Yew Style"
+    },
+    "New global Yew Style": {
+        "prefix": "yewglobstyle",
+        "body": [
+            "pub fn ${1:StyleName}() -> StyleSource {",
+            "    css!(\"",
+            "        .${1} {",
+            "            ",
+            "        }",
+            "    \")",
+            "}"
+        ],
+        "description": "Create a new global Yew Style"
+    }
+}

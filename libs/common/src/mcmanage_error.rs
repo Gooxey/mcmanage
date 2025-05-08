@@ -28,6 +28,9 @@ pub enum MCManageError {
     /// The struct needs to be started before executing anything. Please execute the start function first.
     #[error("The struct needs to be started before executing anything. Please execute the start function first.")]
     NotStarted,
+    /// The api request has invalid arguments.
+    #[error("{0}")]
+    InvalidRequest(String),
     /// An error of kind IOError occurred.
     #[error(transparent)]
     IOError(#[from] io::Error),

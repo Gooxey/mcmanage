@@ -20,11 +20,11 @@ async fn recv_message(client: &mut TcpStream, config: &Arc<Mutex<Config>>) -> Me
                 assert!(false, "The Communicator disconnected.");
             }
             Ok(_) => return Message::try_from(buffer.to_vec()).unwrap(),
-            Err(ref erro) if erro.kind() == io::ErrorKind::WouldBlock => {
+            Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => {
                 continue;
             }
-            Err(erro) => {
-                assert!(false, "Encountered an error while receiving a message from the Communicator. Error: {erro}");
+            Err(error) => {
+                assert!(false, "Encountered an error while receiving a message from the Communicator. Error: {error}");
             }
         }
     }

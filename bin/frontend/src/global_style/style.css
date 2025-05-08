@@ -1,0 +1,117 @@
+colors {
+    --brand: hsl(220 90% 50%);
+
+    --red100: hsl(10 90% 90%);
+    --red200: hsl(10 90% 80%);
+    --red300: hsl(10 90% 70%);
+    --red400: hsl(10 90% 60%);
+    --red500: hsl(10 90% 50%);
+    --red600: hsl(10 90% 40%);
+    --red700: hsl(10 90% 30%);
+    --red800: hsl(10 90% 20%);
+    --red900: hsl(10 90% 10%);
+
+    --orange100: hsl(30 90% 90%);
+    --orange200: hsl(30 90% 80%);
+    --orange300: hsl(30 90% 70%);
+    --orange400: hsl(30 90% 60%);
+    --orange500: hsl(30 90% 50%);
+    --orange600: hsl(30 90% 40%);
+    --orange700: hsl(30 90% 30%);
+    --orange800: hsl(30 90% 20%);
+    --orange900: hsl(30 90% 10%);
+
+    --green100: hsl(120 90% 90%);
+    --green200: hsl(120 90% 80%);
+    --green300: hsl(120 90% 70%);
+    --green400: hsl(120 90% 60%);
+    --green500: hsl(120 90% 50%);
+    --green600: hsl(120 90% 40%);
+    --green700: hsl(120 90% 30%);
+    --green800: hsl(120 90% 20%);
+    --green900: hsl(120 90% 10%);
+
+    /* --blue100: hsl(220 90% 90%);
+    --blue200: hsl(220 90% 80%);
+    --blue300: hsl(220 90% 70%);
+    --blue400: hsl(220 90% 60%);    TODO Add another info color
+    --blue500: hsl(220 90% 50%);
+    --blue600: hsl(220 90% 40%);
+    --blue700: hsl(220 90% 30%);
+    --blue800: hsl(220 90% 20%);
+    --blue900: hsl(220 90% 10%); */
+
+    --grey100: hsl(0 0% 100%);
+    --grey200: hsl(0 0% 84%);
+    --grey300: hsl(0 0% 69%);
+    --grey400: hsl(0 0% 54%);
+    --grey500: hsl(0 0% 40%);
+    --grey600: hsl(0 0% 28%);
+    --grey700: hsl(0 0% 16%);
+    --grey800: hsl(0 0% 7%);
+    --grey900: hsl(0 0% 0%);
+
+    /* TODO Depracate legacy colors */
+
+    --color-primary: #171717;
+    --color-background: #000000;
+    --color-accent: #0065FF;
+    --color-text: #FFFFFF;
+    --color-secondary-text: #A5A5A5;
+    --color-unavailable: #323232;
+    --color-blue: #005ED9;
+    --color-green: #00DD00;
+    --color-yellow: #DDDD00;
+    --color-red: #DD0000;
+    --color-dark-red: #550000;
+}
+
+sizes {
+    --border-radius: 16px;
+    --margin-container: 24px;
+    --font-size: 24px;
+}
+
+body_style {
+    html, body {
+        font-family: 'Roboto', sans-serif;
+        font-size: var(--font-size);
+
+        padding: 0;
+        margin: 0;
+
+        height: 100%;
+        width: 100%;
+
+        background-color: var(--grey900);
+        color: var(--grey100);
+
+
+        /* prevent the user from selecting anything */
+        -webkit-touch-callout: none; /* iOS Safari */
+          -webkit-user-select: none; /* Safari */
+           -khtml-user-select: none; /* Konqueror HTML */
+             -moz-user-select: none; /* Old versions of Firefox */
+              -ms-user-select: none; /* Internet Explorer/Edge */
+                  user-select: none; /* Non-prefixed version, currently
+                                        supported by Chrome, Edge, Opera and Firefox */
+    }
+}
+
+scrollbar {
+    /* width */
+    ::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    /* Handle */
+    ::-webkit-scrollbar-thumb {
+        background-color: var(--grey200);
+        border-radius: 4px;
+    }
+
+    /* Handle on hover */
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: var(--grey100);
+    }
+}

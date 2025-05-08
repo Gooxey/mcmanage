@@ -1,0 +1,40 @@
+[package]
+name = "frontend"
+authors = ["Gooxey"]
+description = "This application is aiming to make the creation and management of Minecraft servers as easy as possible."
+edition = "2021"
+license-file = "../LICENSE"
+readme = "../README.md"
+rust-version = "1.67.1"
+publish = false
+repository = "https://github.com/Gooxey/MCManage.git"
+version = "0.1.0"
+
+
+[dependencies]
+common = { path="../../libs/common", default-features = false, features = ["frontend"] }
+use_css = "0.2.0"
+reqwasm = "0.5.0"
+serde = { version = "1.0.164", features = ["derive"] }
+stylist = { version = "0.12.1", features = ["yew", "parser"] }
+tokio = { version = "1.29.0", features = ["sync", "rt", "time"] }
+wasm-bindgen-futures = "0.4.37"
+web-sys = { version = "0.3.64", features = ["Window"] }
+yew = { version = "0.20.0", features = ["csr"] }
+yew-hooks = "0.2.0"
+yew-router = "0.17.0"
+chrono = { version = "0.4.26", features = ["serde", "wasmbind"] }
+goolog = { version = "0.7.0", features = ["wasm"] }
+gloo-timers = "0.2.6"
+yew-nested-router = "0.2.1"
+derive-getters = "0.3.0"
+paste = "1.0.13"
+
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+[profile.release.package."*"]
+opt-level = 3
+codegen-units = 1

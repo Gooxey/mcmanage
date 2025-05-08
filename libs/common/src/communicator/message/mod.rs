@@ -48,8 +48,8 @@ impl Message {
         communicator: &Arc<C>,
     ) {
         if let MessageType::Request = self.message_type {
-            if let Err(erro) = self.command.execute() {
-                match erro {
+            if let Err(error) = self.command.execute() {
+                match error {
                     MCManageError::MissingPermission => {
                         communicator
                             .send_message(Message::new(

@@ -38,7 +38,7 @@ async fn replace_with_valid_file_one_file_there() {
     start_test();
 
     fs::create_dir(CONFIG_DIR.as_path()).await.unwrap();
-    let mut invalid_mcserver_types_file_1 = OpenOptions::new()
+    let mut invalid_server_types_file_1 = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(MCSERVER_TYPES_FILE.as_path())
@@ -46,7 +46,7 @@ async fn replace_with_valid_file_one_file_there() {
         .unwrap();
     io::copy(
         &mut "Invalid content 1".as_bytes(),
-        &mut invalid_mcserver_types_file_1,
+        &mut invalid_server_types_file_1,
     )
     .await
     .unwrap();
@@ -60,7 +60,7 @@ async fn replace_with_valid_file_one_file_there() {
         .unwrap();
     let mut file_1 = OpenOptions::new()
         .read(true)
-        .open(CONFIG_DIR.join("invalid_mcserver_types.toml"))
+        .open(CONFIG_DIR.join("invalid_server_types.toml"))
         .await
         .unwrap();
 
@@ -80,27 +80,27 @@ async fn replace_with_valid_file_two_files_there() {
     start_test();
 
     fs::create_dir(CONFIG_DIR.as_path()).await.unwrap();
-    let mut invalid_mcserver_types_file_1 = OpenOptions::new()
+    let mut invalid_server_types_file_1 = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(MCSERVER_TYPES_FILE.as_path())
         .await
         .unwrap();
-    let mut invalid_mcserver_types_file_2 = OpenOptions::new()
+    let mut invalid_server_types_file_2 = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(CONFIG_DIR.join("invalid_mcserver_types.toml"))
+        .open(CONFIG_DIR.join("invalid_server_types.toml"))
         .await
         .unwrap();
     io::copy(
         &mut "Invalid content 1".as_bytes(),
-        &mut invalid_mcserver_types_file_1,
+        &mut invalid_server_types_file_1,
     )
     .await
     .unwrap();
     io::copy(
         &mut "Invalid content 2".as_bytes(),
-        &mut invalid_mcserver_types_file_2,
+        &mut invalid_server_types_file_2,
     )
     .await
     .unwrap();
@@ -114,12 +114,12 @@ async fn replace_with_valid_file_two_files_there() {
         .unwrap();
     let mut file_1 = OpenOptions::new()
         .read(true)
-        .open(CONFIG_DIR.join("invalid_mcserver_types.toml"))
+        .open(CONFIG_DIR.join("invalid_server_types.toml"))
         .await
         .unwrap();
     let mut file_2 = OpenOptions::new()
         .read(true)
-        .open(CONFIG_DIR.join("invalid_mcserver_types(1).toml"))
+        .open(CONFIG_DIR.join("invalid_server_types(1).toml"))
         .await
         .unwrap();
 

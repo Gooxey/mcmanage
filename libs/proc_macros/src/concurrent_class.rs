@@ -30,7 +30,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                 self.check_allowed_restart().await?;
 
                 let restart_time = std::time::Instant::now();
-                info!(self.name, "Restarting...");
+                info!("Restarting...");
 
 
                 // ### STOPPING ###
@@ -39,8 +39,8 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                         Ok(_) => {
                             break;
                         }
-                        Err(erro) => {
-                            tokio::time::sleep(Config::cooldown(&self.config).await).await;
+                        Err(error) => {
+                            tokio::time::sleep(Config::cooldown().await).await;
                         }
                     }
                 }
@@ -50,24 +50,24 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                 // ### STARTING ###
 
                 // Try to start the class until it succeeds or the fail limit is reached
-                let max_tries = Config::max_tries(&self.config).await;
+                let max_tries = Config::max_tries().await;
                 for i in 0..max_tries {
-                    if let Err(erro) = self.clone().impl_start(true).await {
-                        error!(self.name, "Encountered an error while starting. Error: {}", erro);
-                        error!(self.name, "This was attempt number {} out of {}", i, max_tries);
+                    if let Err(error) = self.clone().impl_start(true).await {
+                        error!("Encountered an error while starting. Error: {}", error);
+                        error!("This was attempt number {} out of {}", i, max_tries);
 
                         if i == max_tries {
-                            panic!("The maximum number of start attempts has been reached. {} will no longer attempt to start.", self.name)
+                            fatal!("The maximum number of start attempts has been reached.")
                         }
 
-                        tokio::time::sleep(Config::cooldown(&self.config).await).await;
+                        tokio::time::sleep(Config::cooldown().await).await;
                     } else {
                         break;
                     }
                 }
                 *self.status.lock().await = Status::Started;
 
-                info!(self.name, "Restarted in {:.3} secs!", restart_time.elapsed().as_secs_f64());
+                info!("Restarted in {:.3} secs!", restart_time.elapsed().as_secs_f64());
                 return Ok(());
             }
             /// Start a given struct without blocking the calling thread. \
@@ -97,21 +97,21 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                             return;
                         }
                     }
-                    panic!("The bootup_result channel of {} got dropped before a result got sent.", self.name)
+                    fatal!("The bootup_result channel got dropped before a result got sent.")
                 }
             }
             /// Send the started signal.
             async fn send_start_result(self: &std::sync::Arc<Self>, bootup_result: &mut Option<tokio::sync::oneshot::Sender<()>>) {
                 bootup_result.take()
-                    .unwrap_or_else(|| panic!("The 'bootup_result' channel of {} should only be taken once.", self.name))
+                    .unwrap_or_else(|| fatal!("The 'bootup_result' channel should only be taken once."))
                     .send(())
-                    .unwrap_or_else(|_| panic!("The thread starting {} got stopped.", self.name))
+                    .unwrap_or_else(|_| fatal!("The thread of the start function got stopped."))
             }
             /// Check if the [`impl_start`](Self::impl_start) method is allowed to be executed. \
             /// This function will also set the status of the given class to the right value.
-            /// 
+            ///
             /// # Returns
-            /// 
+            ///
             /// | Return                                | Description                                               |
             /// |---------------------------------------|-----------------------------------------------------------|
             /// | `Ok(())`                              | The method can be executed immediately.                   |
@@ -142,9 +142,9 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             /// Check if the [`impl_stop`](Self::impl_stop) method is allowed to be executed. \
             /// This function will also set the status of the given class to the right value. \
             /// If the `forced` parameter got set to true this function will wait until the class has either started or stopped.
-            /// 
+            ///
             /// # Returns
-            /// 
+            ///
             /// | Return                                | Description                                               |
             /// |---------------------------------------|-----------------------------------------------------------|
             /// | `Ok(())`                              | The method can be executed immediately.                   |
@@ -153,13 +153,13 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             /// | [`MCManageError::NotReady`]           | The method can not be used.                               |
             async fn check_allowed_stop(self: &std::sync::Arc<Self>, restart: bool, forced: bool) -> Result<(), MCManageError> {
                 if forced && !restart {
-                    info!(self.name, "Waiting to be fully started before stopping...");
+                    info!("Waiting to be fully started before stopping...");
                     // wait till the class has started
                     loop {
                         if let Status::Started = *self.status.lock().await {
                             break;
                         }
-                        tokio::time::sleep(Config::cooldown(&self.config).await).await;
+                        tokio::time::sleep(Config::cooldown().await).await;
                     }
                 }
 
@@ -185,9 +185,9 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
             }
             /// Check if the [`impl_restart`](Self::impl_restart) method is allowed to be executed. \
             /// This function will also set the status of the given class to the right value.
-            /// 
+            ///
             /// # Returns
-            /// 
+            ///
             /// | Return                                | Description                                                               |
             /// |---------------------------------------|---------------------------------------------------------------------------|
             /// | `Ok(())`                              | The method can be executed immediately.                                   |
@@ -213,9 +213,9 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                 let mut main_thread = self.main_thread.lock().await;
 
                 if main_thread.is_some() {
-                    panic!("Tried to assign a second main thread for {}.", self.name)
+                    fatal!("Tried to assign a second main thread.")
                 }
-                *main_thread = Some(tokio::task::spawn(self.clone().main(Some(tx))));
+                *main_thread = Some(tokio::spawn(self.clone().main(Some(tx))));
                 rx
             }
             /// Stop the [`main thread`](Self::main) of this struct.
@@ -223,7 +223,7 @@ pub fn concurrent_class(input: TokenStream) -> TokenStream {
                 if let Some(thread) = self.main_thread.lock().await.take() {
                     thread.abort();
                 } else {
-                    panic!("The main thread of {} should be available during a stop.", self.name)
+                    fatal!("The main thread should be available during a stop.")
                 }
             }
         }

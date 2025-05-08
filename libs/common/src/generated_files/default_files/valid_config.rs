@@ -14,7 +14,7 @@ buffsize = 100000000
 max_tries = 3
 
 # The port the webserver should run on.
-website_port = 8080
+website_port = 80
 
 # Sets how long the application wait to give other tasks a chance to execute.
 [cooldown]

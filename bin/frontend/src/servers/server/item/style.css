@@ -1,0 +1,72 @@
+container {
+    display: grid;
+
+    grid-template:
+        "image name stats"
+        "image data stats"
+        "image data stats";
+    grid-template-columns: min-content auto min-content;
+
+    height: 100px;
+
+    margin: var(--margin-container);
+    margin-top: 0;
+    margin-bottom: 16px;
+    border-radius: var(--border-radius);
+
+    background-color: var(--color-primary);
+}
+
+image {
+    display: flex;
+
+    grid-area: image;
+
+    aspect-ratio: 1/1;
+    height: 84px;
+
+    margin: 8px;
+    margin-right: 16px;
+
+    border-radius: var(--border-radius);
+}
+
+name {
+    display: flex;
+
+    grid-area: name;
+
+    margin-top: 8px;
+
+    font-size: 24px;
+    font-weight: 600;
+}
+
+data {
+    display: grid;
+
+    grid-area: data;
+
+    margin-top: 8px;
+    margin-bottom: 8px;
+
+    align-items: end;
+}
+
+stats {
+    grid-area: stats;
+
+    margin: 8px;
+    margin-right: 12px;
+
+    text-align: right;
+
+    font-weight: 600;
+
+
+    div {
+        display: flex;
+
+        align-items: center;
+    }
+}

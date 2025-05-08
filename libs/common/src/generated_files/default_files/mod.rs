@@ -9,7 +9,7 @@ use std::path::{
 use self::{
     example_server_list::EXAMPLE_SERVER_LIST,
     valid_config::VALID_CONFIG,
-    valid_mcserver_types::VALID_MCSERVER_TYPES,
+    valid_server_types::VALID_MCSERVER_TYPES,
 };
 use super::paths::CONFIG_DIR;
 use crate::generated_files::paths::{
@@ -18,9 +18,9 @@ use crate::generated_files::paths::{
     SERVER_LIST_FILE,
 };
 
-mod example_server_list;
-mod valid_config;
-mod valid_mcserver_types;
+pub mod example_server_list;
+pub mod valid_config;
+pub mod valid_server_types;
 
 /// This function will return a tuple with:
 ///     1. The path to the given [`static's`](crate::generated_files::paths) `example file`.

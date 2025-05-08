@@ -1,0 +1,6 @@
+[build]
+target = "index.html"
+dist = "../../share/frontend"
+
+[serve]
+port = 80

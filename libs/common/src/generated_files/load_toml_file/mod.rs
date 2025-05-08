@@ -14,18 +14,18 @@ use tokio::{
 };
 use toml::Table;
 
+use goolog::*;
+
 use super::default_files::{
     get_example_content,
     get_valid_content,
 };
 use crate::{
-    error,
     generated_files::paths::{
         get_example_path,
         get_invalid_path,
     },
     mcmanage_error::MCManageError,
-    warn,
 };
 
 mod tests;
@@ -45,10 +45,10 @@ pub async fn load_toml(
                 return Ok(toml);
             }
         }
-        Err(erro) if ErrorKind::NotFound == erro.kind() => {}
-        Err(erro) => {
+        Err(error) if ErrorKind::NotFound == error.kind() => {}
+        Err(error) => {
             panic!(
-                "An error occurred while opening the file at {}. Error: {erro}",
+                "An error occurred while opening the file at {}. Error: {error}",
                 file_path.display()
             )
         }
@@ -69,7 +69,7 @@ pub async fn load_toml_replace(file_path: &Path, caller_name: &str, log: bool) -
 
         if log {
             warn!(
-                caller_name,
+                caller_name;
                 "The file '{}' is invalid. It will be replaced by the default file.",
                 file_path.display()
             );
@@ -85,12 +85,12 @@ pub async fn generate_example_file(file_path: &Path, caller_name: &str, log: boo
     if example_path.exists() {
         if log {
             error!(
-                caller_name,
+                caller_name;
                 "You need to configure the file at {}.",
                 file_path.display()
             );
             error!(
-                caller_name,
+                caller_name;
                 "For a valid write style, see the file at {}.",
                 example_path.display()
             );
@@ -98,7 +98,7 @@ pub async fn generate_example_file(file_path: &Path, caller_name: &str, log: boo
         return;
     } else if log {
         error!(
-            caller_name,
+            caller_name;
             "The file at {} is invalid. A valid example will be generated under {}.",
             file_path.display(),
             example_path.display()
@@ -110,18 +110,18 @@ pub async fn generate_example_file(file_path: &Path, caller_name: &str, log: boo
         .create(true)
         .open(&example_path)
         .await
-        .unwrap_or_else(|erro| {
+        .unwrap_or_else(|error| {
             panic!(
-                "Could not open the file at {}. Error: {erro}",
+                "Could not open the file at {}. Error: {error}",
                 example_path.display()
             )
         });
 
     io::copy(&mut example_content.as_bytes(), &mut example_file)
         .await
-        .unwrap_or_else(|erro| {
+        .unwrap_or_else(|error| {
             panic!(
-                "Failed to copy the 'valid_content' to the file at {}. Error: {erro}",
+                "Failed to copy the 'valid_content' to the file at {}. Error: {error}",
                 example_path.display()
             )
         });
@@ -134,9 +134,9 @@ pub async fn replace_with_valid_file(file_path: &Path) {
     if file_path.exists() {
         fs::rename(&file_path, &invalid_file_path)
             .await
-            .unwrap_or_else(|erro| {
+            .unwrap_or_else(|error| {
                 panic!(
-                    "An error occurred while renaming the file at '{}' to '{}'. Error: {erro}",
+                    "An error occurred while renaming the file at '{}' to '{}'. Error: {error}",
                     file_path.display(),
                     invalid_file_path.display()
                 )
@@ -153,9 +153,9 @@ pub async fn replace_with_valid_file(file_path: &Path) {
         Ok(file) => {
             valid_file = file;
         }
-        Err(erro) => {
+        Err(error) => {
             panic!(
-                "Could not open the file at '{}'. Error: {erro}",
+                "Could not open the file at '{}'. Error: {error}",
                 file_path.display()
             )
         }

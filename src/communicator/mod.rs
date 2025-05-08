@@ -207,49 +207,24 @@ impl Communicator {
     ) -> Result<(), MCManageError> {
         let mut handlers = vec![];
 
-        let mut tries = 0;
+        let tcp_listener = TcpListener::bind(SocketAddr::new(
+            std::net::IpAddr::V4(Ipv4Addr::LOCALHOST),
+            25564,
+        ))
+        .await
+        .unwrap_or_else(|error| panic!("Failed to start the Communicator. Error: {error}"));
+
+        self.send_start_result(&mut bootup_result).await;
+
+        // the main loop of the tcplistener
         loop {
-            tries += 1;
-
-            match TcpListener::bind(SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::LOCALHOST),
-                Config::communicator_port(&self.config).await,
-            ))
-            .await
-            {
-                Ok(tcplistener) => {
-                    self.send_start_result(&mut bootup_result).await;
-
-                    // the main loop of the tcplistener
-                    loop {
-                        match tcplistener.accept().await {
-                            Ok(client) => {
-                                handlers.push(spawn(self.clone().handler(client.0, client.1)));
-                            }
-                            Err(erro) => {
-                                error!(self.name, "Found an error while accepting a new client. This connection will be closed. Error: {erro}");
-                                // It is now the clients responsibility to retry the connection
-                            }
-                        }
-                    }
+            match tcplistener.accept().await {
+                Ok(client) => {
+                    handlers.push(spawn(self.clone().handler(client.0, client.1)));
                 }
-                Err(erro) => {
-                    let max_tries = Config::max_tries(&self.config).await;
-                    if tries == max_tries {
-                        drop(bootup_result.take().expect("The 'bootup_result' channel only be should taken once. Before taking it again the Communicator should be reset."));
-
-                        error!(self.name, "The maximum number of tries has been reached. A reset will be performed.");
-                        self.reset().await;
-                        return Err(MCManageError::FatalError);
-                    } else {
-                        error!(self.name, "Received an error when trying to bind the socket server. Error: {erro}");
-                        error!(
-                            self.name,
-                            "This was try {tries} of of {}. 3 seconds till the next one.",
-                            max_tries
-                        );
-                        sleep(Duration::new(3, 0)).await;
-                    }
+                Err(error) => {
+                    error!(self.name, "Found an error while accepting a new client. This connection will be closed. Error: {error}");
+                    // It is now the clients responsibility to retry the connection
                 }
             }
         }
@@ -302,11 +277,11 @@ impl Communicator {
                     message = Message::try_from(buffer.to_vec())?;
                     break;
                 }
-                Err(ref erro) if erro.kind() == io::ErrorKind::WouldBlock => {
+                Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => {
                     continue;
                 }
-                Err(erro) => {
-                    error!(self.name, "Encountered an error while receiving a message from {client_addr}. This connection will be closed. Error: {erro}");
+                Err(error) => {
+                    error!(self.name, "Encountered an error while receiving a message from {client_addr}. This connection will be closed. Error: {error}");
                     return Err(MCManageError::CriticalError);
                 }
             }
@@ -386,12 +361,12 @@ impl Communicator {
             }
         }
 
-        if let Err(erro) = handle_result {
-            if let MCManageError::CriticalError = erro {
-                return Err(erro);
-            } else if let MCManageError::ClientError = erro {
+        if let Err(error) = handle_result {
+            if let MCManageError::CriticalError = error {
+                return Err(error);
+            } else if let MCManageError::ClientError = error {
             } else {
-                error!(self.name, "Encountered an error while communicating with {client_addr}. This connection will be closed. Error: {erro}");
+                error!(self.name, "Encountered an error while communicating with {client_addr}. This connection will be closed. Error: {error}");
             }
         } else {
             info!(self.name, "{client_addr} disconnected.");
@@ -445,11 +420,11 @@ impl Communicator {
                             return Err(MCManageError::CriticalError);
                         }
                     }
-                    Err(ref erro) if erro.kind() == io::ErrorKind::WouldBlock => {
+                    Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => {
                         continue;
                     }
-                    Err(erro) => {
-                        error!(self.name, "Encountered an error while receiving a message from {client_addr}. This connection will be closed. Error: {erro}");
+                    Err(error) => {
+                        error!(self.name, "Encountered an error while receiving a message from {client_addr}. This connection will be closed. Error: {error}");
                         return Err(MCManageError::ClientError);
                     }
                 }

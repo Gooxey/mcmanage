@@ -17,10 +17,10 @@ async fn new_config() {
 
     replace_with_valid_file(&CONFIG_FILE).await;
 
-    let config = Config::new().await.lock().await.clone();
+    Config::init().await;
     let config_default: Config = toml::from_str(get_valid_content(&CONFIG_FILE)).unwrap();
 
-    assert_eq!(config, config_default);
+    assert_eq!(*CONFIG.get().unwrap().lock().await, config_default);
 
     cleanup();
 }
@@ -30,7 +30,7 @@ async fn field_gets_changed() {
 
     replace_with_valid_file(&CONFIG_FILE).await;
 
-    let config = Config::new().await;
+    Config::init().await;
     let mut config_default: Config = toml::from_str(get_valid_content(&CONFIG_FILE)).unwrap();
     config_default.agree_to_eula = false;
 
@@ -48,7 +48,7 @@ async fn field_gets_changed() {
 
     sleep(Duration::new(1, 0)).await;
 
-    assert_eq!(*config.lock().await, config_default);
+    assert_eq!(*CONFIG.get().unwrap().lock().await, config_default);
 
     cleanup();
 }
@@ -58,7 +58,7 @@ async fn file_gets_invalid() {
 
     replace_with_valid_file(&CONFIG_FILE).await;
 
-    let config = Config::new().await;
+    Config::init().await;
     let config_default: Config = toml::from_str(get_valid_content(&CONFIG_FILE)).unwrap();
 
     sleep(Duration::new(1, 0)).await;
@@ -75,7 +75,7 @@ async fn file_gets_invalid() {
 
     sleep(Duration::new(1, 0)).await;
 
-    assert_eq!(*config.lock().await, config_default);
+    assert_eq!(*CONFIG.get().unwrap().lock().await, config_default);
 
     cleanup();
 }
@@ -83,10 +83,10 @@ async fn file_gets_invalid() {
 async fn file_is_missing() {
     start_test();
 
-    let config = Config::new().await.lock().await.clone();
+    Config::init().await;
     let config_default: Config = toml::from_str(get_valid_content(&CONFIG_FILE)).unwrap();
 
-    assert_eq!(config, config_default);
+    assert_eq!(*CONFIG.get().unwrap().lock().await, config_default);
 
     cleanup();
 }
